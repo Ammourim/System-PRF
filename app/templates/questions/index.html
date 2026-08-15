@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+{% from "partials/_macros.html" import accuracy, discipline_select, subject_fields, demo_tag %}
+
+{% block title %}Questoes - Sistema PRF{% endblock %}
+{% block heading %}Questoes{% endblock %}
+{% block subtitle %}<div class="subtitle">Meta de referencia: {{ goal_folga }} por folga (~{{ goal_folga * folgas }} por ciclo). Meta e referencia, nao obrigacao.</div>{% endblock %}
+
+{% block content %}
+<div class="grid cols-4">
+  <div class="card"><div class="metric">
+    <div class="label">No filtro</div><div class="value">{{ totals.total }}</div>
+    <div class="hint">{{ totals.days }} dia(s) &middot; {{ totals.per_day }}/dia</div>
+  </div></div>
+  <div class="card"><div class="metric">
+    <div class="label">Acerto</div>
+    <div class="value">{{ totals.accuracy|pct(0) if totals.accuracy is not none else '-' }}</div>
+    <div class="hint">{{ totals.correct }} certas / {{ totals.wrong }} erradas</div>
+  </div></div>
+  <div class="card"><div class="metric">
+    <div class="label">No ciclo atual</div>
+    <div class="value">{{ cycle_progress.questions if cycle_progress.cycle else '-' }}</div>
+    <div class="hint">meta {{ cycle_progress.goal_questions if cycle_progress.cycle else '-' }} &middot; {{ cycle_progress.questions_pct|num if cycle_progress.cycle else 0 }}%</div>
+  </div></div>
+  <div class="card"><div class="metric">
+    <div class="label">Sugestao de mix</div>
+    <div class="value">{{ split.new }}+{{ split.review }}</div>
+    <div class="hint">novas + de revisao (sugestao, nao regra)</div>
+  </div></div>
+</div>
+
+<section class="card">
+  <div class="card-head"><div class="card-title">Registrar questoes</div></div>
+  <form method="post" action="{{ url_for('questions.save') }}">
+    <input type="hidden" name="next" value="{{ request.full_path }}">
+    <div class="form-grid">
+      <div class="field">
+        <label for="date">Data</label>
+        <input type="date" id="date" name="date" value="{{ today }}">
+      </div>
+      {{ discipline_select(disciplines, target='q-subject', required=true) }}
+      {{ subject_fields(target='q-subject') }}
+      <div class="field">
+        <label for="total">Quantidade</label>
+        <input type="number" id="total" name="total" min="1" required>
+      </div>
+      <div class="field">
+        <label for="correct">Acertos</label>
+        <input type="number" id="correct" name="correct" min="0" required>
+      </div>
+      <div class="field">
+        <label for="kind">Tipo</label>
+        <select id="kind" name="kind">
+          <option value="novo">Assunto novo</option>
+          <option value="revisao">Revisao</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="banca">Banca</label>
+        <input type="text" id="banca" name="banca" placeholder="Cebraspe">
+      </div>
+      <div class="field">
+        <label for="source">Fonte</label>
+        <input type="text" id="source" name="source" placeholder="Plataforma, PDF, prova">
+      </div>
+      <div class="field span-2">
+        <label for="notes">Observacao</label>
+        <input type="text" id="notes" name="notes">
+      </div>
+    </div>
+    <div class="form-actions"><button class="btn primary" type="submit">Salvar</button></div>
+  </form>
+</section>
+
+<section class="card">
+  <form method="get" class="filters">
+    <div class="field">
+      <label for="f_discipline">Disciplina</label>
+      <select id="f_discipline" name="discipline_id">
+        <option value="">Todas</option>
+        {% for d in disciplines %}
+          <option value="{{ d.id }}" {% if filters.get('discipline_id')|int == d.id %}selected{% endif %}>{{ d.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label for="f_subject">Assunto</label>
+      <select id="f_subject" name="subject_id">
+        <option value="">Todos</option>
+        {% for s in subjects %}
+          <option value="{{ s.id }}" {% if filters.get('subject_id')|int == s.id %}selected{% endif %}>{{ s.short_name }} - {{ s.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label for="f_banca">Banca</label>
+      <input type="text" id="f_banca" name="banca" value="{{ filters.get('banca', '') }}">
+    </div>
+    <div class="field">
+      <label for="f_start">De</label>
+      <input type="date" id="f_start" name="start" value="{{ filters.get('start', '') }}">
+    </div>
+    <div class="field">
+      <label for="f_end">Ate</label>
+      <input type="date" id="f_end" name="end" value="{{ filters.get('end', '') }}">
+    </div>
+    <div class="field">
+      <label for="f_max">% ate</label>
+      <input type="number" id="f_max" name="max_pct" value="{{ filters.get('max_pct', '') }}" style="width:90px">
+    </div>
+    <label class="check"><input type="checkbox" name="only_wrong" value="1" {% if filters.get('only_wrong') %}checked{% endif %}> So com erros</label>
+    <button class="btn" type="submit">Filtrar</button>
+    <a class="btn ghost" href="{{ url_for('questions.index') }}">Limpar</a>
+  </form>
+</section>
+
+<section class="card">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Data</th><th>Disciplina</th><th>Assunto</th><th class="right">Qtd</th>
+          <th class="right">Acertos</th><th class="right">Erros</th><th class="right">%</th>
+          <th>Banca</th><th>Tipo</th><th class="right">Acoes</th></tr>
+      </thead>
+      <tbody>
+        {% for q in questions %}
+          <tr>
+            <td class="nowrap muted">{{ q.date|date_br }}</td>
+            <td class="strong nowrap">{{ q.short_name or '-' }} {{ demo_tag(q) }}</td>
+            <td class="muted small">{{ q.subject_name or '-' }}</td>
+            <td class="right mono">{{ q.total }}</td>
+            <td class="right mono">{{ q.correct }}</td>
+            <td class="right mono">{{ q.wrong }}</td>
+            <td class="right">{{ accuracy(q.percentage) }}</td>
+            <td class="muted small">{{ q.banca or '-' }}</td>
+            <td><span class="badge">{{ q.kind }}</span></td>
+            <td class="actions nowrap">
+              <a class="btn sm ghost" href="{{ url_for('questions.detail', question_id=q.id) }}">Editar</a>
+              <form method="post" action="{{ url_for('questions.delete', question_id=q.id) }}"
+                    class="inline-form" data-confirm="Excluir este registro?">
+                <input type="hidden" name="next" value="{{ request.full_path }}">
+                <button class="btn sm danger" type="submit">Excluir</button>
+              </form>
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="10" class="dim center">Nenhum registro com esses filtros.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

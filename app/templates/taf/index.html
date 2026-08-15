@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+{% from "partials/_macros.html" import delta, progress_bar %}
+
+{% block title %}TAF - Sistema PRF{% endblock %}
+{% block heading %}TAF{% endblock %}
+{% block subtitle %}<div class="subtitle">Organizador de treino e acompanhamento de marcas. Nao e prescricao de treino nem orientacao medica.</div>{% endblock %}
+{% block topbar_actions %}<a class="btn" href="{{ url_for('taf.workouts') }}">Todos os treinos</a>{% endblock %}
+
+{% block content %}
+<section class="card">
+  <div class="card-head">
+    <div class="card-title">Volume de treino (14 dias)</div>
+    <div class="spacer"></div>
+    <span class="tiny dim">{{ minutes_cycle|minutes }} de {{ goal_minutes|minutes }} planejados</span>
+  </div>
+  {{ progress_bar(minutes_cycle, goal_minutes) }}
+</section>
+
+<section class="card">
+  <div class="card-head"><div class="card-title">Testes e marcas</div></div>
+  <div class="grid cols-2">
+    {% for item in tests %}
+      <div class="card flat" style="margin:0">
+        <div class="row">
+          <div class="grow">
+            <h2>{{ item.test.name }}</h2>
+            <div class="tiny dim">
+              {{ item.test.unit }} &middot;
+              {{ 'quanto maior melhor' if item.test.higher_is_better else 'quanto menor melhor' }}
+            </div>
+          </div>
+          <div class="right">
+            <div class="metric">
+              <div class="value">{{ item.test.current_mark|num if item.test.current_mark is not none else '-' }}</div>
+              <div class="hint">meta {{ item.test.goal_mark|num if item.test.goal_mark is not none else '-' }}</div>
+            </div>
+          </div>
+        </div>
+        {% if item.progress %}
+          <div class="mt">{{ progress_bar(item.progress, 100, 'good' if item.progress >= 100 else '') }}</div>
+          <div class="tiny dim mt">{{ item.progress|num }}% da meta &middot; evolucao {{ delta(item.delta) }}</div>
+        {% endif %}
+        {% if item.test.measured_at %}
+          <div class="tiny dim">ultima medicao: {{ item.test.measured_at|date_br }}</div>
+        {% endif %}
+
+        <details class="box mt">
+          <summary>Registrar marca</summary>
+          <form method="post" action="{{ url_for('taf.add_measurement', test_id=item.test.id) }}">
+            <input type="hidden" name="next" value="{{ request.full_path }}">
+            <div class="form-grid cols-3">
+              <div class="field"><label>Data</label><input type="date" name="date" value="{{ today }}"></div>
+              <div class="field"><label>Marca ({{ item.test.unit }})</label>
+                <input type="text" name="value" required></div>
+              <div class="field"><label>Observacao</label><input type="text" name="notes"></div>
+            </div>
+            <div class="form-actions"><button class="btn sm primary" type="submit">Salvar marca</button></div>
+          </form>
+        </details>
+
+        <details class="box">
+          <summary>Configurar teste</summary>
+          <form method="post" action="{{ url_for('taf.save_test') }}">
+            <input type="hidden" name="id" value="{{ item.test.id }}">
+            <input type="hidden" name="next" value="{{ request.full_path }}">
+            <div class="form-grid cols-2">
+              <div class="field"><label>Nome</label><input type="text" name="name" value="{{ item.test.name }}"></div>
+              <div class="field"><label>Unidade</label><input type="text" name="unit" value="{{ item.test.unit }}"></div>
+              <div class="field"><label>Meta</label><input type="text" name="goal_mark" value="{{ item.test.goal_mark|num if item.test.goal_mark is not none else '' }}"></div>
+              <div class="field"><label>Observacao</label><input type="text" name="notes" value="{{ item.test.notes }}"></div>
+            </div>
+            <div class="form-actions">
+              <button class="btn sm primary" type="submit">Salvar</button>
+              <label class="check"><input type="checkbox" name="higher_is_better" value="1" {% if item.test.higher_is_better %}checked{% endif %}> Quanto maior, melhor</label>
+            </div>
+          </form>
+        </details>
+
+        {% if item.history|length > 1 %}
+          <details class="box">
+            <summary>Historico ({{ item.history|length }} medicoes)</summary>
+            <table>
+              <thead><tr><th>Data</th><th class="right">Marca</th><th>Observacao</th></tr></thead>
+              <tbody>
+                {% for h in item.history|reverse %}
+                  <tr><td class="muted">{{ h.date|date_br }}</td>
+                    <td class="right mono">{{ h.value|num }}</td>
+                    <td class="muted small">{{ h.notes }}</td></tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </details>
+        {% endif %}
+      </div>
+    {% endfor %}
+  </div>
+
+  <details class="box mt">
+    <summary>Cadastrar novo teste</summary>
+    <form method="post" action="{{ url_for('taf.save_test') }}">
+      <div class="form-grid">
+        <div class="field"><label>Nome</label><input type="text" name="name" required></div>
+        <div class="field"><label>Unidade</label><input type="text" name="unit" placeholder="repeticoes, metros, segundos"></div>
+        <div class="field"><label>Meta</label><input type="text" name="goal_mark"></div>
+        <div class="field"><label>Observacao</label><input type="text" name="notes"></div>
+      </div>
+      <div class="form-actions">
+        <button class="btn primary" type="submit">Cadastrar</button>
+        <label class="check"><input type="checkbox" name="higher_is_better" value="1" checked> Quanto maior, melhor</label>
+      </div>
+    </form>
+  </details>
+</section>
+
+{% if pending %}
+  <section class="card">
+    <div class="card-head"><div class="card-title">Treinos pendentes</div>
+      <div class="spacer"></div>
+      <span class="tiny dim">Nada e reagendado automaticamente</span></div>
+    <div class="list">
+      {% for w in pending %}
+        <div class="list-item">
+          <span class="dot warn"></span>
+          <div class="grow">
+            <div class="name">{{ w.name or w.type }}</div>
+            <div class="sub">{{ w.date|date_br }} &middot; {{ w.exercise|truncate(60) }}</div>
+          </div>
+          <form method="post" action="{{ url_for('taf.reschedule', workout_id=w.id) }}" class="row tight">
+            <input type="hidden" name="next" value="{{ request.full_path }}">
+            <input type="date" name="date" value="{{ today }}" style="width:auto">
+            <button class="btn sm" type="submit">Remarcar</button>
+          </form>
+          <form method="post" action="{{ url_for('taf.workout_status', workout_id=w.id) }}" class="inline-form">
+            <input type="hidden" name="next" value="{{ request.full_path }}">
+            <input type="hidden" name="status" value="concluido">
+            <button class="btn sm ghost" type="submit">Concluir</button>
+          </form>
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+{% endif %}
+
+<div class="grid cols-2">
+  <section class="card">
+    <div class="card-head"><div class="card-title">Proximos treinos</div></div>
+    <div class="list">
+      {% for w in upcoming %}
+        <div class="list-item">
+          <div class="grow">
+            <div class="name">{{ w.name or w.type }}</div>
+            <div class="sub">{{ w.date|date_br }} &middot; {{ w.duration_minutes }} min &middot; {{ w.exercise|truncate(50) }}</div>
+          </div>
+          <form method="post" action="{{ url_for('taf.workout_status', workout_id=w.id) }}" class="inline-form">
+            <input type="hidden" name="next" value="{{ request.full_path }}">
+            <input type="hidden" name="status" value="concluido">
+            <button class="btn sm" type="submit">Concluir</button>
+          </form>
+        </div>
+      {% else %}
+        <div class="empty">Nenhum treino planejado. <a href="{{ url_for('taf.workouts') }}">Planejar</a>.</div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><div class="card-title">Treinos concluidos</div></div>
+    <div class="list">
+      {% for w in recent %}
+        <div class="list-item">
+          <span class="dot good"></span>
+          <div class="grow">
+            <div class="name">{{ w.name or w.type }}</div>
+            <div class="sub">{{ w.date|date_br }} &middot; {{ w.duration_minutes }} min
+              {%- if w.distance_km %} &middot; {{ w.distance_km|num }} km{% endif %}</div>
+          </div>
+        </div>
+      {% else %}
+        <div class="empty">Nenhum treino concluido ainda.</div>
+      {% endfor %}
+    </div>
+  </section>
+</div>
+{% endblock %}

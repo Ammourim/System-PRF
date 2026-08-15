@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+
+{% block title %}Dados e backup - Sistema PRF{% endblock %}
+{% block heading %}Dados e backup{% endblock %}
+{% block subtitle %}<div class="subtitle">Seus dados ficam em um unico arquivo SQLite. Backup e copia de arquivo, nada de nuvem.</div>{% endblock %}
+
+{% block content %}
+<section class="card">
+  <div class="card-head"><div class="card-title">Backup local</div></div>
+  <div class="stack small muted mb">
+    <div><strong>Banco:</strong> <span class="mono">{{ database }}</span></div>
+    <div><strong>Pasta de backups:</strong> <span class="mono">{{ backup_dir }}</span></div>
+  </div>
+  <form method="post" action="{{ url_for('data.backup') }}" class="inline-form">
+    <button class="btn primary" type="submit">Gerar backup agora</button>
+  </form>
+  <a class="btn" href="{{ url_for('data.export_json') }}">Exportar tudo em JSON</a>
+
+  {% if backups %}
+    <div class="table-wrap mt">
+      <table>
+        <thead><tr><th>Arquivo</th><th class="right">Tamanho</th><th class="right">Acoes</th></tr></thead>
+        <tbody>
+          {% for b in backups %}
+            <tr>
+              <td class="mono">{{ b.name }}</td>
+              <td class="right mono">{{ b.size_kb }} KB</td>
+              <td class="actions nowrap">
+                <a class="btn sm ghost" href="{{ url_for('data.download_backup', name=b.name) }}">Baixar</a>
+                <form method="post" action="{{ url_for('data.restore') }}" class="inline-form"
+                      data-confirm="Restaurar este backup por cima do banco atual? Uma copia do estado atual sera guardada.">
+                  <input type="hidden" name="name" value="{{ b.name }}">
+                  <button class="btn sm danger" type="submit">Restaurar</button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="empty mt">Nenhum backup gerado ainda.</div>
+  {% endif %}
+</section>
+
+<section class="card">
+  <div class="card-head"><div class="card-title">Exportar CSV</div></div>
+  <div class="row tight">
+    {% for table in tables %}
+      <a class="btn sm" href="{{ url_for('data.export_csv', table=table) }}">{{ table }}</a>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="card">
+  <div class="card-head"><div class="card-title">Importar CSV</div></div>
+  <form method="post" action="{{ url_for('data.import_csv') }}" enctype="multipart/form-data">
+    <div class="form-grid cols-2">
+      <div class="field">
+        <label for="table">Tabela de destino</label>
+        <select id="table" name="table" required>
+          {% for table in importable %}<option value="{{ table }}">{{ table }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="file">Arquivo CSV</label>
+        <input type="file" id="file" name="file" accept=".csv,text/csv" required>
+      </div>
+    </div>
+    <div class="form-actions"><button class="btn primary" type="submit">Importar</button></div>
+    <div class="tiny dim mt">
+      O CSV precisa ter cabecalho com os nomes das colunas. A coluna <span class="mono">id</span>
+      e ignorada (as linhas sao sempre inseridas como novas) e colunas desconhecidas sao
+      descartadas. Gere um export da mesma tabela para ver o formato esperado.
+    </div>
+  </form>
+</section>
+{% endblock %}

@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block title %}Modo prova real - Sistema PRF{% endblock %}
+{% block heading %}Modo prova real{% endblock %}
+
+{% block content %}
+<div class="timer-page" id="timer">
+  <div class="timer-display" id="timer-display">00:00:00</div>
+  <div class="timer-sub">tempo restante</div>
+
+  <div class="timer-stats card">
+    <div class="metric">
+      <div class="label">Decorrido</div>
+      <div class="value mono" id="timer-elapsed" style="font-size:20px">00:00:00</div>
+    </div>
+    <div class="metric">
+      <div class="label">Respondidas</div>
+      <div class="row" style="justify-content:center">
+        <button class="btn sm" type="button" data-answered-step="-1">-</button>
+        <input type="number" id="timer-answered" value="0" min="0" style="width:80px; text-align:center">
+        <button class="btn sm" type="button" data-answered-step="1">+</button>
+      </div>
+    </div>
+    <div class="metric">
+      <div class="label">Restantes</div>
+      <div class="value" id="timer-remaining-questions">0</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="form-grid cols-2">
+      <div class="field">
+        <label for="timer-minutes">Duracao planejada (min)</label>
+        <input type="number" id="timer-minutes" value="{{ default_minutes }}" min="1">
+      </div>
+      <div class="field">
+        <label for="timer-total">Total de questoes</label>
+        <input type="number" id="timer-total" value="{{ default_questions }}" min="1">
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="btn primary big" type="button" id="timer-start">Iniciar</button>
+      <button class="btn" type="button" id="timer-pause" disabled>Pausar</button>
+      <button class="btn" type="button" id="timer-finish">Encerrar e registrar</button>
+      <a class="btn ghost" href="{{ url_for('mocks.index') }}">Sair</a>
+    </div>
+    <div class="tiny dim mt">
+      Durante a contagem a navegacao lateral some para reduzir distracao.
+    </div>
+  </div>
+
+  <div class="card hidden" id="timer-result">
+    <div class="card-head"><div class="card-title">Registrar este simulado</div></div>
+    <form method="post" action="{{ url_for('mocks.save') }}">
+      <input type="hidden" name="total_minutes" id="form-total-minutes" value="0">
+      <input type="hidden" name="planned_minutes" id="form-planned-minutes" value="{{ default_minutes }}">
+      <input type="hidden" name="time_left_minutes" id="form-time-left" value="0">
+      <input type="hidden" name="total" id="form-total" value="{{ default_questions }}">
+      <div class="form-grid cols-2">
+        <div class="field"><label for="name">Nome</label>
+          <input type="text" id="name" name="name" value="Simulado {{ today|replace('-', '') }}" required></div>
+        <div class="field"><label for="date">Data</label>
+          <input type="date" id="date" name="date" value="{{ today }}"></div>
+        <div class="field"><label for="correct">Acertos</label>
+          <input type="number" id="correct" name="correct" min="0" required></div>
+        <div class="field"><label for="banca">Banca</label>
+          <input type="text" id="banca" name="banca"></div>
+        <div class="field span-2"><label for="perception">Percepcao</label>
+          <textarea id="perception" name="perception" placeholder="Onde perdeu tempo, o que chutou, como se sentiu"></textarea></div>
+      </div>
+      <div class="form-actions"><button class="btn primary" type="submit">Salvar simulado</button></div>
+    </form>
+  </div>
+</div>
+{% endblock %}

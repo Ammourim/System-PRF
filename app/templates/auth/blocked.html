@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Acesso bloqueado - Sistema PRF</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+</head>
+<body>
+  <main class="timer-page" style="max-width: 560px">
+    <section class="card">
+      {% if reason == 'sem_senha' %}
+        <div class="card-head"><div class="card-title">Configuracao incompleta</div></div>
+        <h2 class="mb">Nenhuma senha definida</h2>
+        <p class="muted">
+          Esta aplicacao esta sendo acessada por um endereco externo, mas nenhuma senha foi
+          configurada. Por seguranca, ela nao vai servir nenhum dado ate isso ser resolvido.
+        </p>
+        <p class="muted">No console do servidor, gere o hash da senha:</p>
+        <pre class="mono card flat" style="padding: 10px; overflow-x: auto"
+>python -m flask --app run:app set-password</pre>
+        <p class="muted">
+          Copie a linha gerada para o arquivo <span class="mono">.env</span>, confirme que
+          <span class="mono">PRF_SECRET_KEY</span> tem uma chave propria e recarregue a
+          aplicacao. Os detalhes estao em <span class="mono">DEPLOY.md</span>.
+        </p>
+      {% else %}
+        <div class="card-head"><div class="card-title">Requisicao recusada</div></div>
+        <h2 class="mb">Origem invalida</h2>
+        <p class="muted">
+          Este envio de formulario nao partiu do proprio sistema e foi recusado como medida
+          de seguranca (protecao contra CSRF).
+        </p>
+        <p class="muted">
+          Se voce estava usando o sistema normalmente, volte a pagina inicial e tente de novo.
+        </p>
+        <a class="btn primary" href="/">Voltar ao painel</a>
+      {% endif %}
+    </section>
+  </main>
+</body>
+</html>

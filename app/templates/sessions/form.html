@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% from "partials/_macros.html" import discipline_select, subject_fields %}
+
+{% block title %}Registrar sessao - Sistema PRF{% endblock %}
+{% block heading %}{{ 'Editar sessao' if session else 'Registrar sessao' }}{% endblock %}
+
+{% block content %}
+<form method="post" action="{{ url_for('sessions.save') }}">
+  {% if session %}<input type="hidden" name="id" value="{{ session.id }}">{% endif %}
+  {% if block %}
+    <input type="hidden" name="block_id" value="{{ block.id }}">
+    <input type="hidden" name="planned_minutes" value="{{ block.planned_minutes }}">
+  {% endif %}
+
+  {% if block %}
+    <div class="card accent">
+      <div class="card-title mb">Bloco do ciclo</div>
+      <strong>{{ block.position }}. {{ block.discipline_name }}</strong>
+      <span class="muted">- {{ block.planned_minutes }} minutos planejados</span>
+    </div>
+  {% endif %}
+
+  <section class="card">
+    <div class="card-head"><div class="card-title">Sessao</div></div>
+    <div class="form-grid">
+      <div class="field">
+        <label for="date">Data</label>
+        <input type="date" id="date" name="date" value="{{ session.date if session else today }}" required>
+      </div>
+      {{ discipline_select(disciplines, (session.discipline_id if session else (block.discipline_id if block else None)), target='sess-subject', required=true) }}
+      {{ subject_fields(subjects, (session.subject_id if session else (block.subject_id if block else None)), target='sess-subject') }}
+      <div class="field">
+        <label for="type">Tipo</label>
+        <select id="type" name="type">
+          {% for key, label in session_types.items() %}
+            <option value="{{ key }}" {% if session and session.type == key %}selected{% elif not session and key == 'teoria' %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="planned_minutes">Tempo planejado (min)</label>
+        <input type="text" id="planned_minutes" name="planned_minutes"
+               value="{{ session.planned_minutes if session else (block.planned_minutes if block else '') }}">
+      </div>
+      <div class="field">
+        <label for="actual_minutes">Tempo realizado (min)</label>
+        <input type="text" id="actual_minutes" name="actual_minutes"
+               value="{{ session.actual_minutes if session else '' }}" required
+               placeholder="aceita 45, 1:30 ou 1h30">
+      </div>
+      <div class="field span-2">
+        <label for="notes">Observacao</label>
+        <input type="text" id="notes" name="notes" value="{{ session.notes if session else '' }}"
+               placeholder="O que travou, o que fixou, o que revisar">
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <div class="card-title">Questoes desta sessao</div>
+      <div class="spacer"></div>
+      <span class="tiny dim">Opcional</span>
+    </div>
+    <div class="form-grid">
+      <div class="field">
+        <label for="questions_total">Quantidade</label>
+        <input type="number" id="questions_total" name="questions_total" min="0"
+               value="{{ question.total if question else '' }}">
+      </div>
+      <div class="field">
+        <label for="questions_correct">Acertos</label>
+        <input type="number" id="questions_correct" name="questions_correct" min="0"
+               value="{{ question.correct if question else '' }}">
+      </div>
+      <div class="field">
+        <label for="banca">Banca</label>
+        <input type="text" id="banca" name="banca" value="{{ question.banca if question else '' }}" placeholder="Cebraspe">
+      </div>
+      <div class="field">
+        <label for="source">Fonte</label>
+        <input type="text" id="source" name="source" value="{{ question.source if question else '' }}" placeholder="Caderno, PDF, plataforma">
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="form-actions">
+      <button class="btn primary" type="submit">Salvar</button>
+      {% if not session %}
+        <label class="check"><input type="checkbox" name="advance_cycle" value="1" {% if block %}checked{% endif %}> Concluir bloco e avancar o ciclo</label>
+        <label class="check"><input type="checkbox" name="create_review" value="1"> Agendar revisao</label>
+        <select name="review_method" style="width:auto">
+          {% for key, label in review_methods.items() %}<option value="{{ key }}">{{ label }}</option>{% endfor %}
+        </select>
+      {% endif %}
+      <a class="btn ghost" href="{{ url_for('sessions.index') }}">Cancelar</a>
+    </div>
+  </section>
+</form>
+{% endblock %}

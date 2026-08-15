@@ -1,0 +1,25 @@
+# Ambiente
+.venv/
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Segredos e configuracao local
+.env
+*.secret
+credentials.json
+token.json
+
+# Banco de dados e backups (dados pessoais)
+data/*.db
+data/*.db-wal
+data/*.db-shm
+backups/
+exports/
+
+# Sistema operacional / editores
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

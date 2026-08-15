@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% from "partials/_macros.html" import accuracy, demo_tag %}
+
+{% block title %}Simulados - Sistema PRF{% endblock %}
+{% block heading %}Simulados{% endblock %}
+{% block subtitle %}<div class="subtitle">Frequencia configurada: {{ frequency }}. Nenhum simulado e criado automaticamente.</div>{% endblock %}
+{% block topbar_actions %}<a class="btn primary" href="{{ url_for('mocks.timer') }}">Modo prova real</a>{% endblock %}
+
+{% block content %}
+<section class="card">
+  <div class="card-head">
+    <div class="card-title">Proximo simulado</div>
+    <div class="spacer"></div>
+    <span class="badge">{{ status.frequency_label }}</span>
+  </div>
+  <div class="row">
+    <div class="grow">
+      {% if status.state == 'manual' %}
+        <div class="strong">Aviso desligado.</div>
+        <div class="muted small">A frequencia esta em "manual": voce decide quando fazer.
+          Mude em <a href="{{ url_for('settings.index') }}">Configuracoes</a>.</div>
+      {% elif status.state == 'primeiro' %}
+        <div class="strong">Nenhum simulado registrado ainda.</div>
+        <div class="muted small">O primeiro serve de linha de base - nao espere estar pronto.</div>
+      {% elif status.state == 'adiado' %}
+        <div class="strong">Aviso adiado ate {{ status.snoozed_until|date_br }}.</div>
+        <div class="muted small">A frequencia continua {{ status.frequency_label|lower }}.</div>
+      {% elif status.state == 'agendado' %}
+        <div class="strong">Proximo em {{ status.next_date|date_br }} ({{ status.days_left }} dia(s)).</div>
+        <div class="muted small">Ultimo: {{ status.last.name }} em {{ status.last.date|date_br }},
+          ha {{ status.days_since }} dias.</div>
+      {% else %}
+        <div class="strong text-warn">
+          {% if status.days_left < 0 %}Venceu ha {{ -status.days_left }} dia(s).{% else %}Vence hoje.{% endif %}
+        </div>
+        <div class="muted small">Ultimo: {{ status.last.name }} em {{ status.last.date|date_br }},
+          ha {{ status.days_since }} dias.</div>
+      {% endif %}
+    </div>
+    <a class="btn primary" href="{{ url_for('mocks.timer') }}">Modo prova real</a>
+    {% if status.state == 'adiado' %}
+      <form method="post" action="{{ url_for('mocks.snooze') }}" class="inline-form">
+        <input type="hidden" name="next" value="{{ request.full_path }}">
+        <input type="hidden" name="action" value="clear">
+        <button class="btn ghost" type="submit">Reativar aviso</button>
+      </form>
+    {% endif %}
+  </div>
+  <div class="tiny dim mt">
+    O simulado fica fora do ciclo de proposito: e um evento grande, que raramente cabe no
+    lugar em que um ciclo o colocaria. O sistema so avisa - nada e criado automaticamente.
+    Registre o tempo gasto como sessao do tipo "Simulado" e "Correcao de simulado" se quiser
+    que ele conte nas horas do ciclo.
+  </div>
+</section>
+
+{% if series|length > 1 %}
+  <section class="card">
+    <div class="card-head"><div class="card-title">Evolucao nos simulados</div></div>
+    {% set w = 720 %}{% set h = 160 %}{% set step = (w - 40) / (series|length - 1) %}
+    <svg class="chart" viewBox="0 0 {{ w }} {{ h }}" preserveAspectRatio="none" role="img"
+         aria-label="Percentual de acerto por simulado">
+      {% for pct in [0, 25, 50, 75, 100] %}
+        {% set y = h - 20 - (pct / 100 * (h - 40)) %}
+        <line class="grid-line" x1="30" y1="{{ y }}" x2="{{ w - 10 }}" y2="{{ y }}"></line>
+        <text x="0" y="{{ y + 3 }}">{{ pct }}%</text>
+      {% endfor %}
+      <polyline class="line" points="
+        {%- for point in series -%}
+          {{ 30 + loop.index0 * step }},{{ h - 20 - (point.accuracy / 100 * (h - 40)) }}
+        {% endfor -%}"></polyline>
+      {% for point in series %}
+        <circle cx="{{ 30 + loop.index0 * step }}" cy="{{ h - 20 - (point.accuracy / 100 * (h - 40)) }}"
+                r="3" fill="var(--good)"><title>{{ point.name }}: {{ point.accuracy }}%</title></circle>
+      {% endfor %}
+    </svg>
+  </section>
+{% endif %}
+
+<section class="card">
+  <div class="card-head"><div class="card-title">Registrar simulado</div></div>
+  <form method="post" action="{{ url_for('mocks.save') }}">
+    <div class="form-grid">
+      <div class="field"><label for="name">Nome</label>
+        <input type="text" id="name" name="name" placeholder="Simulado #02" required></div>
+      <div class="field"><label for="date">Data</label>
+        <input type="date" id="date" name="date" value="{{ today }}"></div>
+      <div class="field"><label for="banca">Banca</label>
+        <input type="text" id="banca" name="banca" placeholder="Cebraspe"></div>
+      <div class="field"><label for="prova">Prova / origem</label>
+        <input type="text" id="prova" name="prova" placeholder="PRF 2021"></div>
+      <div class="field"><label for="total">Total de questoes</label>
+        <input type="number" id="total" name="total" value="{{ default_questions }}"></div>
+      <div class="field"><label for="correct">Acertos</label>
+        <input type="number" id="correct" name="correct" min="0"></div>
+      <div class="field"><label for="planned_minutes">Tempo planejado (min)</label>
+        <input type="text" id="planned_minutes" name="planned_minutes" value="{{ default_minutes }}"></div>
+      <div class="field"><label for="total_minutes">Tempo gasto (min)</label>
+        <input type="text" id="total_minutes" name="total_minutes"></div>
+    </div>
+    <div class="form-actions"><button class="btn primary" type="submit">Registrar e lancar por disciplina</button></div>
+  </form>
+</section>
+
+<section class="card">
+  <div class="card-head"><div class="card-title">Historico</div></div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Simulado</th><th>Data</th><th>Banca</th><th class="right">Nota</th><th class="right">%</th>
+          <th class="right">Tempo</th><th class="right">Min/questao</th><th class="right">Acoes</th></tr>
+      </thead>
+      <tbody>
+        {% for m in mocks %}
+          <tr>
+            <td class="strong"><a href="{{ url_for('mocks.detail', mock_id=m.id) }}">{{ m.name }}</a> {{ demo_tag(m) }}</td>
+            <td class="muted nowrap">{{ m.date|date_br }}</td>
+            <td class="muted small">{{ m.banca or '-' }}</td>
+            <td class="right mono">{{ m.correct }}/{{ m.total }}</td>
+            <td class="right">{{ accuracy(m.percentage) }}</td>
+            <td class="right nowrap">{{ m.total_minutes|minutes }}</td>
+            <td class="right mono">{{ (m.total_minutes / m.total)|round(2) if m.total else '-' }}</td>
+            <td class="actions">
+              <a class="btn sm ghost" href="{{ url_for('mocks.detail', mock_id=m.id) }}">Analise</a>
+              <form method="post" action="{{ url_for('mocks.delete', mock_id=m.id) }}"
+                    class="inline-form" data-confirm="Excluir o simulado e seus resultados?">
+                <button class="btn sm danger" type="submit">Excluir</button>
+              </form>
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="8" class="dim center">Nenhum simulado registrado.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

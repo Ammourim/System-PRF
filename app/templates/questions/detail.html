@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% from "partials/_macros.html" import discipline_select, subject_fields %}
+
+{% block title %}Editar questoes - Sistema PRF{% endblock %}
+{% block heading %}Editar registro de questoes{% endblock %}
+
+{% block content %}
+<section class="card">
+  <form method="post" action="{{ url_for('questions.save') }}">
+    <input type="hidden" name="id" value="{{ question.id }}">
+    <input type="hidden" name="next" value="{{ url_for('questions.index') }}">
+    <div class="form-grid">
+      <div class="field">
+        <label for="date">Data</label>
+        <input type="date" id="date" name="date" value="{{ question.date }}">
+      </div>
+      {{ discipline_select(disciplines, question.discipline_id, target='qd-subject', required=true) }}
+      {{ subject_fields(subjects, question.subject_id, target='qd-subject') }}
+      <div class="field">
+        <label for="total">Quantidade</label>
+        <input type="number" id="total" name="total" value="{{ question.total }}" min="1" required>
+      </div>
+      <div class="field">
+        <label for="correct">Acertos</label>
+        <input type="number" id="correct" name="correct" value="{{ question.correct }}" min="0" required>
+      </div>
+      <div class="field">
+        <label for="kind">Tipo</label>
+        <select id="kind" name="kind">
+          <option value="novo" {% if question.kind == 'novo' %}selected{% endif %}>Assunto novo</option>
+          <option value="revisao" {% if question.kind == 'revisao' %}selected{% endif %}>Revisao</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="banca">Banca</label>
+        <input type="text" id="banca" name="banca" value="{{ question.banca }}">
+      </div>
+      <div class="field">
+        <label for="source">Fonte</label>
+        <input type="text" id="source" name="source" value="{{ question.source }}">
+      </div>
+      <div class="field span-full">
+        <label for="notes">Observacao</label>
+        <textarea id="notes" name="notes">{{ question.notes }}</textarea>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="btn primary" type="submit">Salvar</button>
+      <a class="btn ghost" href="{{ url_for('questions.index') }}">Voltar</a>
+    </div>
+  </form>
+</section>
+{% endblock %}

@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+{% from "partials/_macros.html" import accuracy, delta, progress_bar %}
+
+{% block title %}Relatorio do ciclo - Sistema PRF{% endblock %}
+{% block heading %}Relatorio - {{ cycle.name }}{% endblock %}
+{% block subtitle %}<div class="subtitle">{{ cycle.start_date|date_br }} a {{ cycle.end_date|date_br }} &middot; {{ cycle.status }}</div>{% endblock %}
+
+{% block topbar_actions %}
+  <a class="btn" href="{{ url_for('cycles.build') }}">Montar proximo ciclo</a>
+{% endblock %}
+
+{% block content %}
+<section class="card">
+  <div class="card-head"><div class="card-title">Resultado do ciclo</div></div>
+  <div class="grid cols-4">
+    <div class="metric">
+      <div class="label">Meta PRF</div>
+      <div class="value">{{ report.goal_minutes|minutes }}</div>
+      <div class="hint">planejado</div>
+    </div>
+    <div class="metric">
+      <div class="label">Realizado</div>
+      <div class="value">{{ report.minutes|minutes }}</div>
+      <div class="hint">{{ report.minutes_pct|num }}% da meta</div>
+    </div>
+    <div class="metric">
+      <div class="label">Questoes</div>
+      <div class="value">{{ report.questions }}</div>
+      <div class="hint">meta {{ report.goal_questions }}</div>
+    </div>
+    <div class="metric">
+      <div class="label">Acerto medio</div>
+      <div class="value">{{ report.accuracy|pct(0) if report.accuracy is not none else '-' }}</div>
+      <div class="hint">no periodo do ciclo</div>
+    </div>
+  </div>
+  <div class="mt">{{ progress_bar(report.minutes, report.goal_minutes) }}</div>
+  <div class="tiny dim mt">
+    Meta e referencia, nao obrigacao. A diferenca entre planejado e realizado fica sempre visivel.
+  </div>
+</section>
+
+<div class="grid cols-2">
+  <section class="card">
+    <div class="card-head"><div class="card-title">Disciplinas mais estudadas</div></div>
+    {% if report.top_disciplines %}
+      {% set maxm = report.top_disciplines[0].minutes or 1 %}
+      {% for row in report.top_disciplines %}
+        <div class="hbar">
+          <span class="label">{{ row.name }}</span>
+          <span class="bar"><span style="width: {{ (row.minutes / maxm * 100)|round(1) }}%"></span></span>
+          <span class="value">{{ row.minutes|minutes }}</span>
+        </div>
+      {% endfor %}
+    {% else %}
+      <div class="empty">Sem sessoes registradas neste ciclo.</div>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <div class="card-head"><div class="card-title">Pontos fracos</div></div>
+    {% if report.weak_points %}
+      <div class="list">
+        {% for row in report.weak_points %}
+          <div class="list-item">
+            <span class="dot {{ row.accuracy|level }}"></span>
+            <div class="grow">
+              <div class="name">{{ row.short_name }} - {{ row.subject_name }}</div>
+              <div class="sub">{{ row.questions }} questoes</div>
+            </div>
+            {{ accuracy(row.accuracy) }}
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="empty">Nenhum assunto com amostra suficiente abaixo do limiar.</div>
+    {% endif %}
+  </section>
+</div>
+
+<div class="grid cols-3">
+  <section class="card">
+    <div class="card-head"><div class="card-title">Revisoes</div></div>
+    <div class="metric"><div class="value">{{ report.reviews_done }}</div><div class="hint">realizadas no ciclo</div></div>
+    <div class="metric mt"><div class="value">{{ report.reviews_pending }}</div><div class="hint">pendentes ao fim do ciclo</div></div>
+  </section>
+  <section class="card">
+    <div class="card-head"><div class="card-title">TAF</div></div>
+    <div class="metric"><div class="value">{{ report.workouts }}</div><div class="hint">treinos concluidos</div></div>
+  </section>
+  <section class="card">
+    <div class="card-head"><div class="card-title">Faculdade</div></div>
+    <div class="metric"><div class="value">{{ report.college_minutes|minutes }}</div><div class="hint">registrados no ciclo</div></div>
+  </section>
+</div>
+
+<section class="card">
+  <div class="card-head"><div class="card-title">Simulados do ciclo</div></div>
+  {% if report.mocks %}
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Simulado</th><th>Data</th><th class="right">Nota</th><th class="right">%</th><th class="right">Tempo</th></tr></thead>
+        <tbody>
+          {% for mock in report.mocks %}
+            <tr>
+              <td><a href="{{ url_for('mocks.detail', mock_id=mock.id) }}">{{ mock.name }}</a></td>
+              <td class="muted">{{ mock.date|date_br }}</td>
+              <td class="right mono">{{ mock.correct }}/{{ mock.total }}</td>
+              <td class="right">{{ accuracy(mock.percentage) }}</td>
+              <td class="right">{{ mock.total_minutes|minutes }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="empty">Nenhum simulado neste ciclo.</div>
+  {% endif %}
+</section>
+
+<section class="card">
+  <div class="card-head"><div class="card-title">Analise do ciclo</div></div>
+  <p>
+    Voce estudou <strong>{{ report.minutes|minutes }}</strong> de {{ report.goal_minutes|minutes }} planejados
+    ({{ report.minutes_pct|num }}% da meta), com <strong>{{ report.questions }}</strong> questoes
+    {% if report.accuracy is not none %}e media de <strong>{{ report.accuracy|pct(0) }}</strong>{% endif %}.
+  </p>
+  <div class="grid cols-2 mt">
+    <div>
+      <h3 class="mb">O que funcionou</h3>
+      <ul class="muted small">
+        {% if report.best_evolution %}
+          <li>Maior evolucao: <strong>{{ report.best_evolution.name }}</strong> ({{ delta(report.best_evolution.delta) }}).</li>
+        {% endif %}
+        {% if report.minutes_pct >= 85 %}<li>Volume de estudo proximo ou acima da meta do ciclo.</li>{% endif %}
+        {% if report.reviews_done %}<li>{{ report.reviews_done }} revisoes concluidas - a fila nao acumulou.</li>{% endif %}
+        {% if report.workouts %}<li>{{ report.workouts }} treinos de TAF concluidos.</li>{% endif %}
+        {% if not report.best_evolution and report.minutes_pct < 85 and not report.reviews_done %}
+          <li class="dim">Ainda sem dados suficientes para destacar pontos positivos.</li>
+        {% endif %}
+      </ul>
+    </div>
+    <div>
+      <h3 class="mb">O que precisa melhorar</h3>
+      <ul class="muted small">
+        {% if report.worst_evolution %}
+          <li>Maior queda: <strong>{{ report.worst_evolution.name }}</strong> ({{ delta(report.worst_evolution.delta) }}).</li>
+        {% endif %}
+        {% for row in report.weak_points[:3] %}
+          <li>{{ row.short_name }} - {{ row.subject_name }}: {{ row.accuracy|pct(0) }}.</li>
+        {% endfor %}
+        {% if report.reviews_pending %}<li>{{ report.reviews_pending }} revisoes ficaram pendentes.</li>{% endif %}
+        {% if report.minutes_pct < 70 %}<li>Volume abaixo de 70% da meta - considere revisar a meta ou a disponibilidade.</li>{% endif %}
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section class="card">
+  <div class="card-head">
+    <div class="card-title">Sugestoes para o proximo ciclo</div>
+    <div class="spacer"></div>
+    <a class="btn sm" href="{{ url_for('performance.adjustments') }}">Ver todas com detalhe</a>
+  </div>
+  {% if report.suggestions %}
+    <div class="list">
+      {% for s in report.suggestions %}
+        <div class="list-item">
+          <span class="badge {{ 'bad' if s.direction == 'aumentar' else ('accent' if s.direction == 'reduzir' else '') }}">
+            {{ '↑' if s.direction == 'aumentar' else ('↓' if s.direction == 'reduzir' else '→') }} {{ s.direction }}
+          </span>
+          <div class="grow">
+            <div class="name">{{ s.name }}</div>
+            <div class="sub">{{ s.reasons|join(' ') }}</div>
+          </div>
+          <span class="mono small">{{ s.current_target }} → {{ s.suggested_target }} min</span>
+        </div>
+      {% endfor %}
+    </div>
+    <div class="tiny dim mt">Sugestoes sao sugestoes. Nada e aplicado sem voce clicar.</div>
+  {% else %}
+    <div class="empty">Sem sugestoes - dados insuficientes.</div>
+  {% endif %}
+</section>
+{% endblock %}

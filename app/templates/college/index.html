@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+{% from "partials/_macros.html" import progress_bar %}
+
+{% block title %}Faculdade - Sistema PRF{% endblock %}
+{% block heading %}Faculdade{% endblock %}
+{% block subtitle %}<div class="subtitle">Planejamento independente do ciclo PRF. Meta atual: {{ goal_minutes|minutes }} por semana.</div>{% endblock %}
+
+{% block content %}
+<section class="card">
+  <div class="card-head">
+    <div class="card-title">Semana atual (desde {{ week_start|date_br }})</div>
+    <div class="spacer"></div>
+    <span class="tiny dim">{{ minutes_week|minutes }} de {{ goal_minutes|minutes }}</span>
+  </div>
+  {{ progress_bar(minutes_week, goal_minutes) }}
+</section>
+
+<div class="grid cols-2">
+  <section class="card">
+    <div class="card-head"><div class="card-title">Registrar estudo</div></div>
+    <form method="post" action="{{ url_for('college.save_session') }}">
+      <input type="hidden" name="next" value="{{ request.full_path }}">
+      <div class="form-grid cols-2">
+        <div class="field"><label for="date">Data</label>
+          <input type="date" id="date" name="date" value="{{ today }}"></div>
+        <div class="field">
+          <label for="college_subject_id">Disciplina</label>
+          <select id="college_subject_id" name="college_subject_id">
+            <option value="">-</option>
+            {% for s in subjects %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="field"><label for="minutes">Tempo (min)</label>
+          <input type="text" id="minutes" name="minutes" required></div>
+        <div class="field"><label for="notes">Observacao</label>
+          <input type="text" id="notes" name="notes"></div>
+      </div>
+      <div class="form-actions"><button class="btn primary" type="submit">Salvar</button></div>
+    </form>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><div class="card-title">Nova atividade</div></div>
+    <form method="post" action="{{ url_for('college.save_task') }}">
+      <input type="hidden" name="next" value="{{ request.full_path }}">
+      <div class="form-grid cols-2">
+        <div class="field"><label for="title">Titulo</label>
+          <input type="text" id="title" name="title" required></div>
+        <div class="field">
+          <label for="task_subject">Disciplina</label>
+          <select id="task_subject" name="college_subject_id">
+            <option value="">-</option>
+            {% for s in subjects %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label for="type">Tipo</label>
+          <select id="type" name="type">
+            {% for key, label in task_types.items() %}<option value="{{ key }}">{{ label }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="field"><label for="due_date">Prazo</label>
+          <input type="date" id="due_date" name="due_date"></div>
+      </div>
+      <div class="form-actions"><button class="btn primary" type="submit">Cadastrar</button></div>
+    </form>
+  </section>
+</div>
+
+<section class="card">
+  <div class="card-head"><div class="card-title">Atividades em aberto</div></div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Atividade</th><th>Disciplina</th><th>Tipo</th><th>Prazo</th><th class="right">Acoes</th></tr></thead>
+      <tbody>
+        {% for t in tasks %}
+          <tr>
+            <td class="strong">{{ t.title }}</td>
+            <td class="muted">{{ t.subject_name or '-' }}</td>
+            <td><span class="badge {{ 'bad' if t.type == 'prova' }}">{{ task_types.get(t.type, t.type) }}</span></td>
+            <td class="nowrap {{ 'text-bad' if t.due_date and t.due_date < today }}">{{ t.due_date|date_br }}</td>
+            <td class="actions nowrap">
+              <form method="post" action="{{ url_for('college.task_status', task_id=t.id) }}" class="inline-form">
+                <input type="hidden" name="next" value="{{ request.full_path }}">
+                <input type="hidden" name="status" value="concluida">
+                <button class="btn sm" type="submit">Concluir</button>
+              </form>
+              <form method="post" action="{{ url_for('college.delete_task', task_id=t.id) }}"
+                    class="inline-form" data-confirm="Excluir esta atividade?">
+                <input type="hidden" name="next" value="{{ request.full_path }}">
+                <button class="btn sm danger" type="submit">Excluir</button>
+              </form>
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="5" class="dim center">Nenhuma atividade em aberto.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<div class="grid cols-2">
+  <section class="card">
+    <div class="card-head"><div class="card-title">Disciplinas</div></div>
+    <div class="list">
+      {% for s in subjects %}
+        <div class="list-item">
+          <div class="grow">
+            <div class="name">{{ s.name }}</div>
+            <div class="sub">{{ s.professor or 'sem professor informado' }}</div>
+          </div>
+          <span class="dim small">{{ s.minutes|minutes }}</span>
+          <form method="post" action="{{ url_for('college.delete_subject', subject_id=s.id) }}"
+                class="inline-form" data-confirm="Desativar esta disciplina?">
+            <button class="btn sm ghost" type="submit">Desativar</button>
+          </form>
+        </div>
+      {% else %}
+        <div class="empty">Nenhuma disciplina cadastrada.</div>
+      {% endfor %}
+    </div>
+    <details class="box mt">
+      <summary>Cadastrar disciplina</summary>
+      <form method="post" action="{{ url_for('college.save_subject') }}">
+        <input type="hidden" name="next" value="{{ request.full_path }}">
+        <div class="form-grid cols-2">
+          <div class="field"><label>Nome</label><input type="text" name="name" required></div>
+          <div class="field"><label>Professor</label><input type="text" name="professor"></div>
+        </div>
+        <div class="form-actions"><button class="btn primary" type="submit">Cadastrar</button></div>
+      </form>
+    </details>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><div class="card-title">Ultimos registros</div></div>
+    <div class="list">
+      {% for s in sessions %}
+        <div class="list-item">
+          <div class="grow">
+            <div class="name">{{ s.subject_name or 'Sem disciplina' }}</div>
+            <div class="sub">{{ s.date|date_br }}{% if s.notes %} &middot; {{ s.notes|truncate(40) }}{% endif %}</div>
+          </div>
+          <div class="strong nowrap">{{ s.minutes }} min</div>
+          <form method="post" action="{{ url_for('college.delete_session', session_id=s.id) }}"
+                class="inline-form" data-confirm="Excluir este registro?">
+            <input type="hidden" name="next" value="{{ request.full_path }}">
+            <button class="btn sm ghost" type="submit">x</button>
+          </form>
+        </div>
+      {% else %}
+        <div class="empty">Nenhum registro de estudo da faculdade.</div>
+      {% endfor %}
+    </div>
+  </section>
+</div>
+
+{% if done_tasks %}
+  <details class="box">
+    <summary>Atividades concluidas ({{ done_tasks|length }})</summary>
+    <div class="list">
+      {% for t in done_tasks %}
+        <div class="list-item">
+          <span class="dot good"></span>
+          <div class="grow"><div class="name">{{ t.title }}</div>
+            <div class="sub">{{ t.subject_name or '-' }} &middot; {{ t.due_date|date_br }}</div></div>
+          <form method="post" action="{{ url_for('college.task_status', task_id=t.id) }}" class="inline-form">
+            <input type="hidden" name="next" value="{{ request.full_path }}">
+            <input type="hidden" name="status" value="aberta">
+            <button class="btn sm ghost" type="submit">Reabrir</button>
+          </form>
+        </div>
+      {% endfor %}
+    </div>
+  </details>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% from "partials/_macros.html" import discipline_select, subject_fields, demo_tag %}
+
+{% block title %}Caderno de erros - Sistema PRF{% endblock %}
+{% block heading %}Caderno de erros{% endblock %}
+{% block subtitle %}<div class="subtitle">Classificar o erro vale mais que anotar a questao: mostra o que treinar.</div>{% endblock %}
+
+{% block content %}
+{% if by_category %}
+  <section class="card">
+    <div class="card-head"><div class="card-title">Erros por categoria (90 dias)</div></div>
+    {% set maxv = by_category[0].total or 1 %}
+    {% for row in by_category %}
+      <div class="hbar">
+        <span class="label">{{ categories.get(row.category, row.category) }}</span>
+        <span class="bar"><span style="width: {{ (row.total / maxv * 100)|round(1) }}%"></span></span>
+        <span class="value">{{ row.total }}</span>
+      </div>
+    {% endfor %}
+  </section>
+{% endif %}
+
+<section class="card">
+  <div class="card-head"><div class="card-title">Registrar erro</div></div>
+  <form method="post" action="{{ url_for('mistakes.save') }}">
+    <input type="hidden" name="next" value="{{ request.full_path }}">
+    <div class="form-grid">
+      <div class="field">
+        <label for="date">Data</label>
+        <input type="date" id="date" name="date" value="{{ today }}">
+      </div>
+      {{ discipline_select(disciplines, target='mist-subject', required=true) }}
+      {{ subject_fields(target='mist-subject') }}
+      <div class="field">
+        <label for="category">Categoria</label>
+        <select id="category" name="category">
+          {% for key, label in categories.items() %}<option value="{{ key }}">{{ key }} - {{ label }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="field span-2">
+        <label for="question_ref">Questao / enunciado curto</label>
+        <input type="text" id="question_ref" name="question_ref" placeholder="Ex.: multa x medida administrativa">
+      </div>
+      <div class="field span-2">
+        <label for="explanation">Explicacao correta</label>
+        <input type="text" id="explanation" name="explanation" placeholder="O que era o certo e por que">
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="btn primary" type="submit">Salvar erro</button>
+      <label class="check"><input type="checkbox" name="needs_review" value="1" checked> Precisa de revisao</label>
+    </div>
+  </form>
+</section>
+
+<section class="card">
+  <form method="get" class="filters">
+    <div class="field">
+      <label for="f_discipline">Disciplina</label>
+      <select id="f_discipline" name="discipline_id">
+        <option value="">Todas</option>
+        {% for d in disciplines %}
+          <option value="{{ d.id }}" {% if filters.get('discipline_id')|int == d.id %}selected{% endif %}>{{ d.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label for="f_category">Categoria</label>
+      <select id="f_category" name="category">
+        <option value="">Todas</option>
+        {% for key, label in categories.items() %}
+          <option value="{{ key }}" {% if filters.get('category') == key %}selected{% endif %}>{{ key }} - {{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label for="f_status">Status</label>
+      <select id="f_status" name="status">
+        <option value="">Abertos e revisados</option>
+        {% for key, label in statuses.items() %}
+          <option value="{{ key }}" {% if filters.get('status') == key %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button class="btn" type="submit">Filtrar</button>
+    <a class="btn ghost" href="{{ url_for('mistakes.index') }}">Limpar</a>
+  </form>
+</section>
+
+<section class="card">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Data</th><th>Disciplina</th><th>Assunto</th><th>Cat.</th><th>Questao</th>
+          <th>Explicacao</th><th>Status</th><th class="right">Acoes</th></tr>
+      </thead>
+      <tbody>
+        {% for m in mistakes %}
+          <tr>
+            <td class="nowrap muted">{{ m.date|date_br }}</td>
+            <td class="strong nowrap">{{ m.short_name or '-' }} {{ demo_tag(m) }}</td>
+            <td class="muted small">{{ m.subject_name or '-' }}</td>
+            <td><span class="badge {{ 'bad' if m.category in ['C', 'CH'] else ('warn' if m.category in ['E', 'A'] else '') }}"
+                     title="{{ categories.get(m.category, '') }}">{{ m.category }}</span></td>
+            <td class="small">{{ m.question_ref|truncate(60) }}</td>
+            <td class="muted small">{{ m.explanation|truncate(70) }}</td>
+            <td><span class="badge {{ 'good' if m.status == 'consolidado' else ('accent' if m.status == 'revisado' else '') }}">{{ m.status }}</span></td>
+            <td class="actions nowrap">
+              <form method="post" action="{{ url_for('mistakes.to_review', mistake_id=m.id) }}" class="inline-form">
+                <input type="hidden" name="next" value="{{ request.full_path }}">
+                <button class="btn sm ghost" type="submit" title="Cria uma revisao com metodo caderno de erros">Gerar revisao</button>
+              </form>
+              <form method="post" action="{{ url_for('mistakes.set_status', mistake_id=m.id) }}" class="inline-form">
+                <input type="hidden" name="next" value="{{ request.full_path }}">
+                <input type="hidden" name="status" value="{{ 'aberto' if m.status == 'consolidado' else 'consolidado' }}">
+                <button class="btn sm ghost" type="submit">{{ 'Reabrir' if m.status == 'consolidado' else 'Consolidar' }}</button>
+              </form>
+              <form method="post" action="{{ url_for('mistakes.delete', mistake_id=m.id) }}"
+                    class="inline-form" data-confirm="Excluir este erro?">
+                <input type="hidden" name="next" value="{{ request.full_path }}">
+                <button class="btn sm danger" type="submit">Excluir</button>
+              </form>
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="8" class="dim center">Nenhum erro registrado com esses filtros.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,4 @@
+Flask==3.1.3
+# Base de fusos horarios: no Windows o zoneinfo da stdlib nao a encontra sozinho.
+tzdata==2026.3
+pytest==9.1.1

@@ -1,0 +1,237 @@
+{% extends "base.html" %}
+{% from "partials/_macros.html" import progress_bar %}
+
+{% block title %}Ciclo - Sistema PRF{% endblock %}
+{% block heading %}Ciclo de estudos{% endblock %}
+{% block subtitle %}<div class="subtitle">A posicao so avanca quando voce conclui um bloco. Dia da semana nao importa.</div>{% endblock %}
+
+{% block topbar_actions %}
+  <a class="btn" href="{{ url_for('cycles.build') }}">Montar ciclo</a>
+  {% if cycle %}<a class="btn" href="{{ url_for('cycles.report', cycle_id=cycle.id) }}">Relatorio</a>{% endif %}
+{% endblock %}
+
+{% block content %}
+{% if not cycle %}
+  <div class="empty">
+    Nenhum ciclo ativo. <a href="{{ url_for('cycles.build') }}">Monte um ciclo</a> para comecar.
+  </div>
+{% else %}
+
+<section class="card">
+  <div class="card-head">
+    <div class="card-title">{{ cycle.name }}</div>
+    <span class="badge">{{ cycle.start_date|date_br }} a {{ cycle.end_date|date_br }}</span>
+    <div class="spacer"></div>
+    <form method="post" action="{{ url_for('cycles.close', cycle_id=cycle.id) }}" class="inline-form"
+          data-confirm="Encerrar este ciclo? O historico e mantido e voce vai para o relatorio.">
+      <button class="btn sm" type="submit">Encerrar ciclo</button>
+    </form>
+  </div>
+
+  <div class="grid cols-4">
+    <div class="metric">
+      <div class="label">Blocos</div>
+      <div class="value">{{ progress.done_blocks }} / {{ progress.total_blocks }}</div>
+      <div class="hint">posicao atual: {{ progress.position }}</div>
+    </div>
+    <div class="metric">
+      <div class="label">Horas realizadas</div>
+      <div class="value">{{ progress.minutes|minutes }}</div>
+      <div class="hint">meta {{ progress.goal_minutes|minutes }} ({{ progress.minutes_pct|num }}%)</div>
+    </div>
+    <div class="metric">
+      <div class="label">Questoes</div>
+      <div class="value">{{ progress.questions }}</div>
+      <div class="hint">meta {{ progress.goal_questions }} ({{ progress.questions_pct|num }}%)</div>
+    </div>
+    <div class="metric">
+      <div class="label">Acerto no ciclo</div>
+      <div class="value">{{ progress.accuracy|pct(0) if progress.accuracy is not none else '-' }}</div>
+      <div class="hint">planejado: {{ progress.planned_minutes|minutes }} em blocos</div>
+    </div>
+  </div>
+
+  <div class="mt">{{ progress_bar(progress.done_blocks, progress.total_blocks) }}</div>
+
+  <div class="row mt">
+    <div class="blocks-strip">
+      {% for b in blocks %}
+        <i class="{{ 'done' if b.done else ('current' if b.position == progress.position else '') }}"
+           title="{{ b.position }}. {{ b.discipline_name }} ({{ b.planned_minutes }} min)"></i>
+      {% endfor %}
+    </div>
+  </div>
+
+  <details class="box mt">
+    <summary>Ajustar posicao manualmente</summary>
+    <form method="post" action="{{ url_for('cycles.set_position') }}" class="row">
+      <input type="hidden" name="next" value="{{ url_for('cycles.index') }}">
+      <div class="field" style="margin:0">
+        <label for="position">Ir para a posicao</label>
+        <input type="number" id="position" name="position" min="1" max="{{ progress.total_blocks + 1 }}"
+               value="{{ progress.position }}" style="width:120px">
+      </div>
+      <button class="btn" type="submit">Aplicar</button>
+      <span class="tiny dim">Util se voce estudou fora de ordem. Nada e perdido.</span>
+    </form>
+  </details>
+
+  <div class="tiny dim mt">
+    Capacidade declarada no ciclo: ~{{ capacity.total_minutes|minutes }}
+    ({{ capacity.plantoes }} plantoes de {{ capacity.plantao_minutes|minutes }} +
+    {{ capacity.folgas }} folgas de {{ capacity.folga_minutes|minutes }}).
+  </div>
+</section>
+
+<section class="card">
+  <div class="card-head">
+    <div class="card-title">Blocos do ciclo</div>
+    <div class="spacer"></div>
+    <span class="tiny dim">Clique no bloco para editar disciplina, assunto e duracao</span>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:52px">#</th>
+          <th>Disciplina</th>
+          <th>Assunto / foco</th>
+          <th class="right">Duracao</th>
+          <th>Status</th>
+          <th class="right">Acoes</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for b in blocks %}
+          <tr {% if b.position == progress.position %}style="background: var(--accent-soft)"{% endif %}>
+            <td class="mono">{{ b.position }}</td>
+            <td class="strong">{{ b.discipline_name }}</td>
+            <td class="muted small">{{ b.subject_name or b.focus or '-' }}</td>
+            <td class="right nowrap">{{ b.planned_minutes }} min</td>
+            <td>
+              {% if b.done %}<span class="badge good">concluido</span>
+              {% elif b.position == progress.position %}<span class="badge accent">atual</span>
+              {% else %}<span class="badge">pendente</span>{% endif %}
+            </td>
+            <td class="actions">
+              <form method="post" action="{{ url_for('cycles.update_block', block_id=b.id) }}" class="inline-form">
+                <input type="hidden" name="action" value="toggle">
+                <input type="hidden" name="next" value="{{ url_for('cycles.index') }}">
+                <button class="btn sm ghost" type="submit">{{ 'Reabrir' if b.done else 'Marcar feito' }}</button>
+              </form>
+              <a class="btn sm ghost" href="{{ url_for('sessions.new', block_id=b.id) }}">Registrar</a>
+            </td>
+          </tr>
+          <tr>
+            <td colspan="6" style="padding:0 8px 10px">
+              <details class="box" style="margin:0">
+                <summary>Editar bloco {{ b.position }}</summary>
+                <form method="post" action="{{ url_for('cycles.update_block', block_id=b.id) }}">
+                  <input type="hidden" name="next" value="{{ url_for('cycles.index') }}">
+                  <div class="form-grid">
+                    <div class="field">
+                      <label>Disciplina</label>
+                      <select name="discipline_id">
+                        {% for d in disciplines %}
+                          <option value="{{ d.id }}" {% if d.id == b.discipline_id %}selected{% endif %}>{{ d.name }}</option>
+                        {% endfor %}
+                      </select>
+                    </div>
+                    <div class="field">
+                      <label>Assunto</label>
+                      <select name="subject_id">
+                        <option value="">-</option>
+                        {% for s in subjects %}
+                          <option value="{{ s.id }}" {% if s.id == b.subject_id %}selected{% endif %}>{{ s.short_name }} - {{ s.name }}</option>
+                        {% endfor %}
+                      </select>
+                    </div>
+                    <div class="field">
+                      <label>Duracao (min)</label>
+                      <input type="text" name="planned_minutes" value="{{ b.planned_minutes }}">
+                    </div>
+                    <div class="field">
+                      <label>Foco / anotacao</label>
+                      <input type="text" name="focus" value="{{ b.focus }}">
+                    </div>
+                  </div>
+                  <div class="form-actions">
+                    <button class="btn primary sm" type="submit">Salvar bloco</button>
+                    <button class="btn sm danger" type="submit" name="action" value="delete"
+                            formnovalidate>Remover bloco</button>
+                  </div>
+                </form>
+              </details>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <details class="box mt">
+    <summary>Adicionar bloco ao fim do ciclo</summary>
+    <form method="post" action="{{ url_for('cycles.add_block') }}">
+      <div class="form-grid">
+        <div class="field">
+          <label>Disciplina</label>
+          <select name="discipline_id" required>
+            <option value="">-</option>
+            {% for d in disciplines %}<option value="{{ d.id }}">{{ d.name }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label>Assunto</label>
+          <select name="subject_id">
+            <option value="">-</option>
+            {% for s in subjects %}<option value="{{ s.id }}">{{ s.short_name }} - {{ s.name }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label>Duracao (min)</label>
+          <input type="text" name="planned_minutes" value="60">
+        </div>
+        <div class="field">
+          <label>Foco</label>
+          <input type="text" name="focus" placeholder="opcional">
+        </div>
+      </div>
+      <div class="form-actions"><button class="btn" type="submit">Adicionar</button></div>
+    </form>
+  </details>
+</section>
+{% endif %}
+
+<section class="card">
+  <div class="card-head"><div class="card-title">Historico de ciclos</div></div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>#</th><th>Nome</th><th>Periodo</th><th>Status</th><th class="right">Meta</th><th class="right">Acoes</th></tr>
+      </thead>
+      <tbody>
+        {% for c in history %}
+          <tr>
+            <td class="mono">{{ c.number }}</td>
+            <td>{{ c.name }}</td>
+            <td class="muted small">{{ c.start_date|date_br }} - {{ c.end_date|date_br }}</td>
+            <td>{% if c.status == 'ativo' %}<span class="badge accent">ativo</span>{% else %}<span class="badge">encerrado</span>{% endif %}</td>
+            <td class="right">{{ c.goal_minutes|minutes }}</td>
+            <td class="actions">
+              <a class="btn sm ghost" href="{{ url_for('cycles.report', cycle_id=c.id) }}">Relatorio</a>
+              {% if c.status != 'ativo' %}
+                <form method="post" action="{{ url_for('cycles.reopen', cycle_id=c.id) }}" class="inline-form">
+                  <button class="btn sm ghost" type="submit">Reabrir</button>
+                </form>
+              {% endif %}
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="6" class="dim">Nenhum ciclo registrado.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

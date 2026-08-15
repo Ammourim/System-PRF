@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% from "partials/_macros.html" import accuracy %}
+
+{% block title %}Disciplinas - Sistema PRF{% endblock %}
+{% block heading %}Disciplinas{% endblock %}
+{% block subtitle %}<div class="subtitle">Incidencia historica informada por voce. Quando o edital sair, edite os pesos aqui.</div>{% endblock %}
+
+{% block content %}
+<section class="card">
+  <form method="post" action="{{ url_for('disciplines.bulk_update') }}">
+    <div class="card-head">
+      <div class="card-title">Pesos, prioridade e metas</div>
+      <div class="spacer"></div>
+      <span class="tiny dim">soma da incidencia: {{ incidence_total|num(2) }}% &middot; soma das metas: {{ total_target|minutes }}</span>
+      <button class="btn primary sm" type="submit">Salvar alteracoes</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Disciplina</th><th class="right">Incidencia %</th><th>Prioridade</th><th>Status</th>
+            <th class="right">Meta/ciclo (min)</th><th class="right">Meta em horas</th>
+            <th class="right">Tempo total</th><th class="right">Questoes</th><th class="right">Acerto</th></tr>
+        </thead>
+        <tbody>
+          {% for d in disciplines %}
+            <tr>
+              <td class="strong"><a href="{{ url_for('disciplines.detail', discipline_id=d.id) }}">{{ d.name }}</a></td>
+              <td class="right"><input type="text" name="incidence_{{ d.id }}" value="{{ d.incidence|num(2) }}" style="width:80px; text-align:right"></td>
+              <td>
+                <select name="priority_{{ d.id }}" style="width:auto">
+                  {% for key, label in priorities.items() %}
+                    <option value="{{ key }}" {% if d.priority == key %}selected{% endif %}>{{ label }}</option>
+                  {% endfor %}
+                </select>
+              </td>
+              <td>
+                <select name="status_{{ d.id }}" style="width:auto">
+                  {% for key, label in statuses.items() %}
+                    <option value="{{ key }}" {% if d.status == key %}selected{% endif %}>{{ label }}</option>
+                  {% endfor %}
+                </select>
+              </td>
+              <td class="right"><input type="text" name="target_{{ d.id }}" value="{{ d.target_minutes }}" style="width:80px; text-align:right"></td>
+              <td class="right mono dim">{{ d.target_minutes|minutes }}</td>
+              <td class="right nowrap">{{ d.minutes|minutes }}</td>
+              <td class="right mono">{{ d.questions }}</td>
+              <td class="right">{{ accuracy(d.accuracy) }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </form>
+</section>
+
+<section class="card">
+  <details class="box" style="margin:0">
+    <summary>Cadastrar nova disciplina</summary>
+    <form method="post" action="{{ url_for('disciplines.create') }}">
+      <div class="form-grid">
+        <div class="field"><label for="name">Nome</label><input type="text" id="name" name="name" required></div>
+        <div class="field"><label for="short_name">Sigla</label><input type="text" id="short_name" name="short_name"></div>
+        <div class="field"><label for="incidence">Incidencia %</label><input type="text" id="incidence" name="incidence" value="0"></div>
+        <div class="field">
+          <label for="priority">Prioridade</label>
+          <select id="priority" name="priority">
+            {% for key, label in priorities.items() %}<option value="{{ key }}">{{ label }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label for="status">Status</label>
+          <select id="status" name="status">
+            {% for key, label in statuses.items() %}<option value="{{ key }}">{{ label }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="field"><label for="block_minutes">Bloco (min)</label><input type="text" id="block_minutes" name="block_minutes" value="60"></div>
+        <div class="field"><label for="target_minutes">Meta/ciclo (min)</label><input type="text" id="target_minutes" name="target_minutes" value="0"></div>
+      </div>
+      <div class="form-actions"><button class="btn primary" type="submit">Cadastrar</button></div>
+    </form>
+  </details>
+</section>
+{% endblock %}

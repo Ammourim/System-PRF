@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% from "partials/_macros.html" import accuracy, demo_tag %}
+
+{% block title %}Sessoes - Sistema PRF{% endblock %}
+{% block heading %}Sessoes de estudo{% endblock %}
+{% block topbar_actions %}<a class="btn primary" href="{{ url_for('sessions.new') }}">Nova sessao</a>{% endblock %}
+
+{% block content %}
+<section class="card">
+  <form method="get" class="filters">
+    <div class="field">
+      <label for="discipline_id">Disciplina</label>
+      <select id="discipline_id" name="discipline_id">
+        <option value="">Todas</option>
+        {% for d in disciplines %}
+          <option value="{{ d.id }}" {% if filters.get('discipline_id')|int == d.id %}selected{% endif %}>{{ d.name }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label for="type">Tipo</label>
+      <select id="type" name="type">
+        <option value="">Todos</option>
+        {% for key, label in session_types.items() %}
+          <option value="{{ key }}" {% if filters.get('type') == key %}selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="field">
+      <label for="start">De</label>
+      <input type="date" id="start" name="start" value="{{ filters.get('start', '') }}">
+    </div>
+    <div class="field">
+      <label for="end">Ate</label>
+      <input type="date" id="end" name="end" value="{{ filters.get('end', '') }}">
+    </div>
+    <button class="btn" type="submit">Filtrar</button>
+    <a class="btn ghost" href="{{ url_for('sessions.index') }}">Limpar</a>
+  </form>
+</section>
+
+<div class="grid cols-4">
+  <div class="card"><div class="metric"><div class="label">Sessoes</div><div class="value">{{ totals.count }}</div></div></div>
+  <div class="card"><div class="metric"><div class="label">Tempo</div><div class="value">{{ totals.minutes|minutes }}</div></div></div>
+  <div class="card"><div class="metric"><div class="label">Questoes</div><div class="value">{{ totals.questions }}</div></div></div>
+  <div class="card"><div class="metric"><div class="label">Acerto</div><div class="value">{{ totals.accuracy|pct(0) if totals.accuracy is not none else '-' }}</div></div></div>
+</div>
+
+<section class="card">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Data</th><th>Disciplina</th><th>Assunto</th><th>Tipo</th>
+          <th class="right">Plan.</th><th class="right">Real.</th>
+          <th class="right">Questoes</th><th class="right">%</th>
+          <th>Observacao</th><th class="right">Acoes</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in sessions %}
+          <tr>
+            <td class="nowrap muted">{{ s.date|date_br }}</td>
+            <td class="strong nowrap">{{ s.short_name or '-' }} {{ demo_tag(s) }}</td>
+            <td class="muted small">{{ s.subject_name or '-' }}</td>
+            <td><span class="badge">{{ s.type|replace('_', ' ') }}</span></td>
+            <td class="right mono">{{ s.planned_minutes or '-' }}</td>
+            <td class="right mono strong">{{ s.actual_minutes }}</td>
+            <td class="right mono">{% if s.q_total %}{{ s.q_correct }}/{{ s.q_total }}{% else %}<span class="dim">-</span>{% endif %}</td>
+            <td class="right">{{ accuracy(s.q_pct) if s.q_total else '' }}</td>
+            <td class="muted small">{{ s.notes|truncate(60) }}</td>
+            <td class="actions nowrap">
+              <a class="btn sm ghost" href="{{ url_for('sessions.edit', session_id=s.id) }}">Editar</a>
+              <form method="post" action="{{ url_for('sessions.delete', session_id=s.id) }}"
+                    class="inline-form" data-confirm="Excluir esta sessao?">
+                <input type="hidden" name="next" value="{{ request.full_path }}">
+                <button class="btn sm danger" type="submit">Excluir</button>
+              </form>
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="10" class="dim center">Nenhuma sessao registrada com esses filtros.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

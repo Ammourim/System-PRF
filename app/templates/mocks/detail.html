@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+{% from "partials/_macros.html" import accuracy, delta %}
+
+{% block title %}{{ mock.name }} - Sistema PRF{% endblock %}
+{% block heading %}{{ mock.name }}{% endblock %}
+{% block subtitle %}<div class="subtitle">{{ mock.date|date_br }}{% if mock.banca %} &middot; {{ mock.banca }}{% endif %}{% if mock.prova %} &middot; {{ mock.prova }}{% endif %}</div>{% endblock %}
+{% block topbar_actions %}<a class="btn ghost" href="{{ url_for('mocks.index') }}">Voltar</a>{% endblock %}
+
+{% block content %}
+<div class="grid cols-4">
+  <div class="card"><div class="metric">
+    <div class="label">Nota</div><div class="value">{{ mock.correct }}/{{ mock.total }}</div>
+    <div class="hint">{{ mock.wrong }} erros</div></div></div>
+  <div class="card"><div class="metric">
+    <div class="label">Percentual</div><div class="value">{{ mock.percentage|pct(1) }}</div>
+    <div class="hint">{% if previous %}{{ delta(delta_previous) }} vs {{ previous.name }}{% else %}primeiro simulado{% endif %}</div></div></div>
+  <div class="card"><div class="metric">
+    <div class="label">Tempo</div><div class="value">{{ mock.total_minutes|minutes }}</div>
+    <div class="hint">planejado {{ mock.planned_minutes|minutes }} &middot; sobrou {{ mock.time_left_minutes|minutes }}</div></div></div>
+  <div class="card"><div class="metric">
+    <div class="label">Media por questao</div>
+    <div class="value">{{ minutes_per_question|num(2) if minutes_per_question else '-' }}</div>
+    <div class="hint">minutos</div></div></div>
+</div>
+
+<div class="grid cols-2">
+  <section class="card">
+    <div class="card-head"><div class="card-title">Desempenho por disciplina</div></div>
+    {% if results %}
+      {% for r in results %}
+        <div class="hbar">
+          <span class="label" title="{{ r.discipline_name }}">{{ r.short_name }}</span>
+          <span class="bar {{ 'bad' if r.percentage < 60 else ('warn' if r.percentage < 70 else 'good') }}">
+            <span style="width: {{ r.percentage|round(1) }}%"></span></span>
+          <span class="value">{{ r.percentage|pct(0) }}</span>
+        </div>
+      {% endfor %}
+      <div class="table-wrap mt">
+        <table>
+          <thead><tr><th>Disciplina</th><th class="right">Acertos</th><th class="right">%</th>
+            <th class="right">Incidencia</th><th class="right"></th></tr></thead>
+          <tbody>
+            {% for r in results %}
+              <tr>
+                <td>{{ r.discipline_name }}</td>
+                <td class="right mono">{{ r.correct }}/{{ r.total }}</td>
+                <td class="right">{{ accuracy(r.percentage) }}</td>
+                <td class="right mono dim">{{ r.incidence|num(2) }}%</td>
+                <td class="actions">
+                  <form method="post" action="{{ url_for('mocks.delete_result', result_id=r.id) }}" class="inline-form">
+                    <button class="btn sm ghost" type="submit">Remover</button>
+                  </form>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="empty">Lance o desempenho por disciplina abaixo.</div>
+    {% endif %}
+  </section>
+
+  <section class="card">
+    <div class="card-head"><div class="card-title">Pontos fortes e fracos</div></div>
+    <h3 class="mb">Fortes</h3>
+    {% if strong %}
+      <div class="row tight mb">
+        {% for r in strong %}<span class="badge good">{{ r.short_name }} {{ r.percentage|pct(0) }}</span>{% endfor %}
+      </div>
+    {% else %}<p class="dim small">Nenhuma disciplina acima do limiar.</p>{% endif %}
+    <h3 class="mb">Fracos</h3>
+    {% if weak %}
+      <div class="row tight">
+        {% for r in weak %}<span class="badge bad">{{ r.short_name }} {{ r.percentage|pct(0) }}</span>{% endfor %}
+      </div>
+    {% else %}<p class="dim small">Nenhuma disciplina abaixo do limiar.</p>{% endif %}
+
+    <h3 class="mt-lg mb">Estrategia de prova</h3>
+    <div class="stack small muted">
+      <div><strong>Consumiram muito tempo:</strong> {{ mock.slow_questions or '-' }}</div>
+      <div><strong>Chutadas:</strong> {{ mock.guessed_questions or '-' }}</div>
+      <div><strong>Deixadas para depois:</strong> {{ mock.skipped_questions or '-' }}</div>
+      <div><strong>Tempo restante:</strong> {{ mock.time_left_minutes|minutes }}</div>
+      <div><strong>Percepcao:</strong> {{ mock.perception or '-' }}</div>
+    </div>
+  </section>
+</div>
+
+<section class="card">
+  <div class="card-head"><div class="card-title">Lancar desempenho por disciplina</div></div>
+  <form method="post" action="{{ url_for('mocks.save_result', mock_id=mock.id) }}">
+    <div class="form-grid">
+      <div class="field">
+        <label for="discipline_id">Disciplina</label>
+        <select id="discipline_id" name="discipline_id" required>
+          <option value="">-</option>
+          {% for d in disciplines %}<option value="{{ d.id }}">{{ d.name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="field"><label for="r_total">Questoes</label>
+        <input type="number" id="r_total" name="total" min="1" required></div>
+      <div class="field"><label for="r_correct">Acertos</label>
+        <input type="number" id="r_correct" name="correct" min="0" required></div>
+      <div class="field"><label for="r_notes">Observacao</label>
+        <input type="text" id="r_notes" name="notes"></div>
+    </div>
+    <div class="form-actions">
+      <button class="btn primary" type="submit">Lancar</button>
+      <label class="check"><input type="checkbox" name="recalc_total" value="1"> Recalcular o total do simulado a partir das disciplinas</label>
+    </div>
+  </form>
+</section>
+
+<section class="card">
+  <div class="card-head"><div class="card-title">Erros do simulado</div></div>
+  {% if mistakes %}
+    <div class="table-wrap mb">
+      <table>
+        <thead><tr><th>Disciplina</th><th>Questao</th><th>Categoria</th><th>Explicacao</th></tr></thead>
+        <tbody>
+          {% for m in mistakes %}
+            <tr>
+              <td class="strong">{{ m.short_name or '-' }}</td>
+              <td class="small">{{ m.question_ref }}</td>
+              <td><span class="badge">{{ m.category }}</span></td>
+              <td class="muted small">{{ m.explanation|truncate(80) }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+  <form method="post" action="{{ url_for('mocks.add_mistake', mock_id=mock.id) }}">
+    <div class="form-grid">
+      <div class="field">
+        <label for="m_discipline">Disciplina</label>
+        <select id="m_discipline" name="discipline_id">
+          <option value="">-</option>
+          {% for d in disciplines %}<option value="{{ d.id }}">{{ d.name }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="m_category">Categoria</label>
+        <select id="m_category" name="category">
+          {% for key, label in categories.items() %}<option value="{{ key }}">{{ key }} - {{ label }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="field"><label for="m_ref">Questao</label>
+        <input type="text" id="m_ref" name="question_ref" placeholder="Numero e tema"></div>
+      <div class="field"><label for="m_exp">Explicacao</label>
+        <input type="text" id="m_exp" name="explanation"></div>
+    </div>
+    <div class="form-actions"><button class="btn" type="submit">Adicionar ao caderno de erros</button></div>
+  </form>
+</section>
+
+<section class="card">
+  <details class="box" style="margin:0">
+    <summary>Editar dados do simulado</summary>
+    <form method="post" action="{{ url_for('mocks.save') }}">
+      <input type="hidden" name="id" value="{{ mock.id }}">
+      <div class="form-grid">
+        <div class="field"><label>Nome</label><input type="text" name="name" value="{{ mock.name }}"></div>
+        <div class="field"><label>Data</label><input type="date" name="date" value="{{ mock.date }}"></div>
+        <div class="field"><label>Banca</label><input type="text" name="banca" value="{{ mock.banca }}"></div>
+        <div class="field"><label>Prova</label><input type="text" name="prova" value="{{ mock.prova }}"></div>
+        <div class="field"><label>Total</label><input type="number" name="total" value="{{ mock.total }}"></div>
+        <div class="field"><label>Acertos</label><input type="number" name="correct" value="{{ mock.correct }}"></div>
+        <div class="field"><label>Tempo gasto (min)</label><input type="text" name="total_minutes" value="{{ mock.total_minutes }}"></div>
+        <div class="field"><label>Tempo planejado (min)</label><input type="text" name="planned_minutes" value="{{ mock.planned_minutes }}"></div>
+        <div class="field"><label>Tempo restante (min)</label><input type="text" name="time_left_minutes" value="{{ mock.time_left_minutes }}"></div>
+        <div class="field"><label>Questoes lentas</label><input type="text" name="slow_questions" value="{{ mock.slow_questions }}"></div>
+        <div class="field"><label>Questoes chutadas</label><input type="text" name="guessed_questions" value="{{ mock.guessed_questions }}"></div>
+        <div class="field"><label>Deixadas para depois</label><input type="text" name="skipped_questions" value="{{ mock.skipped_questions }}"></div>
+        <div class="field span-2"><label>Percepcao</label><textarea name="perception">{{ mock.perception }}</textarea></div>
+        <div class="field span-2"><label>Observacoes</label><textarea name="notes">{{ mock.notes }}</textarea></div>
+      </div>
+      <div class="form-actions"><button class="btn primary" type="submit">Salvar</button></div>
+    </form>
+  </details>
+</section>
+{% endblock %}

@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+{% from "partials/_macros.html" import accuracy %}
+
+{% block title %}{{ discipline.name }} - Sistema PRF{% endblock %}
+{% block heading %}{{ discipline.name }}{% endblock %}
+{% block subtitle %}<div class="subtitle">Incidencia {{ discipline.incidence|num(2) }}% &middot; prioridade {{ discipline.priority }} &middot; {{ discipline.status|replace('_', ' ') }}</div>{% endblock %}
+{% block topbar_actions %}<a class="btn ghost" href="{{ url_for('disciplines.index') }}">Todas as disciplinas</a>{% endblock %}
+
+{% block content %}
+<section class="card">
+  <div class="card-head"><div class="card-title">Configuracao da disciplina</div></div>
+  <form method="post" action="{{ url_for('disciplines.update', discipline_id=discipline.id) }}">
+    <div class="form-grid">
+      <div class="field"><label for="name">Nome</label>
+        <input type="text" id="name" name="name" value="{{ discipline.name }}" required></div>
+      <div class="field"><label for="short_name">Sigla</label>
+        <input type="text" id="short_name" name="short_name" value="{{ discipline.short_name }}"></div>
+      <div class="field"><label for="incidence">Incidencia %</label>
+        <input type="text" id="incidence" name="incidence" value="{{ discipline.incidence|num(2) }}"></div>
+      <div class="field">
+        <label for="priority">Prioridade</label>
+        <select id="priority" name="priority">
+          {% for key, label in priorities.items() %}
+            <option value="{{ key }}" {% if discipline.priority == key %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="status">Status</label>
+        <select id="status" name="status">
+          {% for key, label in statuses.items() %}
+            <option value="{{ key }}" {% if discipline.status == key %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field"><label for="block_minutes">Bloco padrao (min)</label>
+        <input type="text" id="block_minutes" name="block_minutes" value="{{ discipline.block_minutes }}"></div>
+      <div class="field"><label for="target_minutes">Meta por ciclo (min)</label>
+        <input type="text" id="target_minutes" name="target_minutes" value="{{ discipline.target_minutes }}"></div>
+      <div class="field span-full"><label for="notes">Anotacoes</label>
+        <textarea id="notes" name="notes">{{ discipline.notes }}</textarea></div>
+    </div>
+    <div class="form-actions">
+      <button class="btn primary" type="submit">Salvar</button>
+      <label class="check"><input type="checkbox" name="active" value="1" {% if discipline.active %}checked{% endif %}> Ativa no ciclo</label>
+    </div>
+  </form>
+</section>
+
+<section class="card">
+  <div class="card-head">
+    <div class="card-title">Assuntos</div>
+    <div class="spacer"></div>
+    <span class="tiny dim">{{ subjects|length }} cadastrados</span>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Assunto</th><th>Status</th><th class="right">Tempo</th><th class="right">Questoes</th>
+        <th class="right">Acerto</th><th class="right">Revisoes</th><th class="right">Acoes</th></tr></thead>
+      <tbody>
+        {% for s in subjects %}
+          <tr>
+            <td class="strong">{{ s.name }}</td>
+            <td class="muted small">{{ s.status|replace('_', ' ') }}</td>
+            <td class="right nowrap">{{ s.minutes|minutes }}</td>
+            <td class="right mono">{{ s.questions }}</td>
+            <td class="right">{{ accuracy(s.accuracy) }}</td>
+            <td class="right mono">{{ s.pending_reviews }}</td>
+            <td class="actions">
+              <details class="box" style="margin:0; text-align:left">
+                <summary>Editar</summary>
+                <form method="post" action="{{ url_for('disciplines.update_subject', subject_id=s.id) }}">
+                  <div class="form-grid cols-3">
+                    <div class="field"><label>Nome</label><input type="text" name="name" value="{{ s.name }}"></div>
+                    <div class="field">
+                      <label>Status</label>
+                      <select name="status">
+                        {% for key, label in statuses.items() %}
+                          <option value="{{ key }}" {% if s.status == key %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                      </select>
+                    </div>
+                    <div class="field"><label>Anotacao</label><input type="text" name="notes" value="{{ s.notes }}"></div>
+                  </div>
+                  <div class="form-actions"><button class="btn sm primary" type="submit">Salvar</button></div>
+                </form>
+                <form method="post" action="{{ url_for('disciplines.delete_subject', subject_id=s.id) }}"
+                      data-confirm="Excluir este assunto? Sessoes e questoes ficam sem assunto.">
+                  <button class="btn sm danger" type="submit">Excluir assunto</button>
+                </form>
+              </details>
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="7" class="dim center">Nenhum assunto cadastrado ainda.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <details class="box mt">
+    <summary>Adicionar assuntos (um por linha)</summary>
+    <form method="post" action="{{ url_for('disciplines.create_subject', discipline_id=discipline.id) }}">
+      <div class="field">
+        <label for="subject_names">Assuntos</label>
+        <textarea id="subject_names" name="name" rows="5" placeholder="Infracoes&#10;Penalidades&#10;Sinalizacao"></textarea>
+      </div>
+      <div class="field">
+        <label for="subject_status">Status inicial</label>
+        <select id="subject_status" name="status">
+          {% for key, label in statuses.items() %}<option value="{{ key }}">{{ label }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="form-actions"><button class="btn primary" type="submit">Cadastrar</button></div>
+    </form>
+  </details>
+</section>
+
+<div class="grid cols-2">
+  <section class="card">
+    <div class="card-head"><div class="card-title">Sessoes recentes</div></div>
+    <div class="list">
+      {% for s in recent_sessions %}
+        <div class="list-item">
+          <div class="grow">
+            <div class="name">{{ s.subject_name or s.type }}</div>
+            <div class="sub">{{ s.date|date_br }} &middot; {{ s.type|replace('_', ' ') }}{% if s.notes %} &middot; {{ s.notes|truncate(50) }}{% endif %}</div>
+          </div>
+          <div class="strong nowrap">{{ s.actual_minutes }} min</div>
+        </div>
+      {% else %}
+        <div class="empty">Nenhuma sessao registrada.</div>
+      {% endfor %}
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><div class="card-title">Erros em aberto</div></div>
+    <div class="list">
+      {% for m in mistakes %}
+        <div class="list-item">
+          <span class="badge">{{ m.category }}</span>
+          <div class="grow">
+            <div class="name">{{ m.question_ref|truncate(50) or m.subject_name }}</div>
+            <div class="sub">{{ m.date|date_br }} &middot; {{ m.subject_name or '-' }}</div>
+          </div>
+        </div>
+      {% else %}
+        <div class="empty">Nenhum erro em aberto.</div>
+      {% endfor %}
+    </div>
+  </section>
+</div>
+
+<section class="card">
+  <form method="post" action="{{ url_for('disciplines.delete', discipline_id=discipline.id) }}"
+        data-confirm="Excluir ou desativar esta disciplina?">
+    <button class="btn danger" type="submit">Excluir / desativar disciplina</button>
+    <span class="tiny dim">Se houver historico, ela e apenas desativada.</span>
+  </form>
+</section>
+{% endblock %}

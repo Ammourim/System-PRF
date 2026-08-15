@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Sistema PRF{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>&#128663;</text></svg>">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <div class="brand">
+      <strong>Sistema PRF</strong>
+      <span>v{{ app_version }}</span>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-group-title">Estudo</div>
+      <nav class="nav">
+        <a href="{{ url_for('dashboard.index') }}" class="{{ 'active' if nav_active == 'dashboard' }}">Painel</a>
+        <a href="{{ url_for('cycles.index') }}" class="{{ 'active' if nav_active == 'cycles' }}">Ciclo</a>
+        <a href="{{ url_for('sessions.index') }}" class="{{ 'active' if nav_active == 'sessions' }}">Sessoes</a>
+        <a href="{{ url_for('questions.index') }}" class="{{ 'active' if nav_active == 'questions' }}">Questoes</a>
+        <a href="{{ url_for('reviews.index') }}" class="{{ 'active' if nav_active == 'reviews' }}">
+          Revisoes
+          {% if review_badge %}<span class="badge {{ 'bad' if review_badge > 6 else 'accent' }}">{{ review_badge }}</span>{% endif %}
+        </a>
+        <a href="{{ url_for('mistakes.index') }}" class="{{ 'active' if nav_active == 'mistakes' }}">Caderno de erros</a>
+        <a href="{{ url_for('mocks.index') }}" class="{{ 'active' if nav_active == 'mocks' }}">Simulados</a>
+      </nav>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-group-title">Analise</div>
+      <nav class="nav">
+        <a href="{{ url_for('performance.index') }}" class="{{ 'active' if nav_active == 'performance' }}">Desempenho</a>
+        <a href="{{ url_for('performance.adjustments') }}">Sugestoes de ajuste</a>
+        <a href="{{ url_for('disciplines.index') }}" class="{{ 'active' if nav_active == 'disciplines' }}">Disciplinas</a>
+      </nav>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-group-title">Fora do ciclo</div>
+      <nav class="nav">
+        <a href="{{ url_for('taf.index') }}" class="{{ 'active' if nav_active == 'taf' }}">TAF</a>
+        <a href="{{ url_for('college.index') }}" class="{{ 'active' if nav_active == 'college' }}">Faculdade</a>
+      </nav>
+    </div>
+
+    <div class="nav-group">
+      <div class="nav-group-title">Sistema</div>
+      <nav class="nav">
+        <a href="{{ url_for('settings.index') }}" class="{{ 'active' if nav_active == 'settings' }}">Configuracoes</a>
+        <a href="{{ url_for('data.index') }}" class="{{ 'active' if nav_active == 'data' }}">Dados e backup</a>
+      </nav>
+      {% if auth_enabled %}
+        <form method="post" action="{{ url_for('auth.logout') }}" style="padding: 0 8px">
+          <button class="btn ghost sm" type="submit" style="width: 100%">Sair</button>
+        </form>
+      {% endif %}
+    </div>
+  </aside>
+
+  <div class="content">
+    <header class="topbar">
+      <div>
+        <h1>{% block heading %}{% endblock %}</h1>
+        {% block subtitle %}{% endblock %}
+      </div>
+      <div class="spacer"></div>
+      {% block topbar_actions %}{% endblock %}
+    </header>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flashes">
+          {% for category, message in messages %}
+            <div class="flash {{ category }}">{{ message }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <main class="page">
+      {% if demo_active and nav_active != 'settings' %}
+        <div class="demo-banner">
+          <span class="badge demo">Demonstracao</span>
+          <span>Ha dados de exemplo no sistema. Eles servem para voce conhecer as telas.</span>
+          <span class="spacer"></span>
+          <a class="btn sm" href="{{ url_for('settings.index') }}#demo">Remover dados de demonstracao</a>
+        </div>
+      {% endif %}
+      {% block content %}{% endblock %}
+    </main>
+  </div>
+</div>
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

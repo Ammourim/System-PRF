@@ -1,0 +1,71 @@
+{# Macros reutilizaveis. Mantidas curtas de proposito. #}
+
+{% macro discipline_select(disciplines, selected=None, name='discipline_id', target='subject_id', required=false, label='Disciplina') %}
+  <div class="field">
+    <label for="{{ name }}-{{ target }}">{{ label }}</label>
+    <select id="{{ name }}-{{ target }}" name="{{ name }}" data-subject-target="{{ target }}"
+            {% if required %}required{% endif %}>
+      <option value="">-</option>
+      {% for d in disciplines %}
+        <option value="{{ d.id }}" {% if selected and selected|int == d.id %}selected{% endif %}>{{ d.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+{% endmacro %}
+
+{% macro subject_fields(subjects=None, selected=None, target='subject_id', show_text=true) %}
+  <div class="field">
+    <label for="{{ target }}">Assunto</label>
+    <select id="{{ target }}" name="subject_id" data-selected="{{ selected or '' }}">
+      <option value="">- (ou digite abaixo)</option>
+      {% for s in subjects or [] %}
+        <option value="{{ s.id }}" {% if selected and selected|int == s.id %}selected{% endif %}>
+          {{ s.short_name ~ ' - ' if s.short_name }}{{ s.name }}
+        </option>
+      {% endfor %}
+    </select>
+  </div>
+  {% if show_text %}
+    <div class="field">
+      <label for="subject_name-{{ target }}">Novo assunto</label>
+      <input type="text" id="subject_name-{{ target }}" name="subject_name" placeholder="Digite para criar">
+    </div>
+  {% endif %}
+{% endmacro %}
+
+{% macro accuracy(value, low=60, mid=70) %}
+  {% if value is none %}
+    <span class="dim">-</span>
+  {% else %}
+    <span class="{{ 'text-bad' if value < low else ('text-warn' if value < mid else 'text-good') }} strong">{{ value|pct(0) }}</span>
+  {% endif %}
+{% endmacro %}
+
+{% macro level_dot(value, low=60, mid=70) %}
+  <span class="dot {{ value|level(low, mid) }}"></span>
+{% endmacro %}
+
+{% macro progress_bar(value, goal, tone='') %}
+  {% set pct = (value / goal * 100) if goal else 0 %}
+  <div class="bar {{ tone }}"><span style="width: {{ [pct, 100]|min|round(1) }}%"></span></div>
+{% endmacro %}
+
+{% macro delta(value, suffix='%') %}
+  {% if value is none %}
+    <span class="dim">-</span>
+  {% elif value > 0 %}
+    <span class="text-good">+{{ value|num }}{{ suffix }}</span>
+  {% elif value < 0 %}
+    <span class="text-bad">{{ value|num }}{{ suffix }}</span>
+  {% else %}
+    <span class="dim">0{{ suffix }}</span>
+  {% endif %}
+{% endmacro %}
+
+{% macro demo_tag(row) %}
+  {% if row and row['is_demo'] %}<span class="badge demo" title="Dado de demonstracao">demo</span>{% endif %}
+{% endmacro %}
+
+{% macro next_field(request) %}
+  <input type="hidden" name="next" value="{{ request.full_path }}">
+{% endmacro %}

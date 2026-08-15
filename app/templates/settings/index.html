@@ -1,0 +1,150 @@
+{% extends "base.html" %}
+
+{% block title %}Configuracoes - Sistema PRF{% endblock %}
+{% block heading %}Configuracoes{% endblock %}
+{% block subtitle %}<div class="subtitle">Nenhum destes valores esta fixo no codigo. Mude quando a rotina mudar ou quando o edital sair.</div>{% endblock %}
+
+{% block content %}
+<form method="post" action="{{ url_for('settings.save') }}">
+  <section class="card">
+    <div class="card-head"><div class="card-title">Ciclo e metas</div></div>
+    <div class="form-grid">
+      <div class="field"><label for="cycle_days">Dias por ciclo</label>
+        <input type="number" id="cycle_days" name="cycle_days" value="{{ settings.cycle_days }}" min="1"></div>
+      <div class="field"><label for="prf_goal_minutes">Meta PRF por ciclo (min)</label>
+        <input type="text" id="prf_goal_minutes" name="prf_goal_minutes" value="{{ settings.prf_goal_minutes }}"></div>
+      <div class="field"><label for="questions_goal_per_cycle">Meta de questoes por ciclo</label>
+        <input type="number" id="questions_goal_per_cycle" name="questions_goal_per_cycle" value="{{ settings.questions_goal_per_cycle }}"></div>
+      <div class="field"><label for="questions_goal_per_folga">Meta de questoes por folga</label>
+        <input type="number" id="questions_goal_per_folga" name="questions_goal_per_folga" value="{{ settings.questions_goal_per_folga }}"></div>
+    </div>
+    <div class="tiny dim">Meta e referencia. O sistema sempre mostra o realizado ao lado.</div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><div class="card-title">Tamanho dos blocos (minutos)</div></div>
+    <div class="form-grid cols-3">
+      <div class="field"><label for="block_long">Bloco longo</label>
+        <input type="text" id="block_long" name="block_long" value="{{ settings.block_long }}"></div>
+      <div class="field"><label for="block_medium">Bloco medio</label>
+        <input type="text" id="block_medium" name="block_medium" value="{{ settings.block_medium }}"></div>
+      <div class="field"><label for="block_short">Bloco curto</label>
+        <input type="text" id="block_short" name="block_short" value="{{ settings.block_short }}"></div>
+    </div>
+    <div class="tiny dim">O bloco de cada disciplina e definido em <a href="{{ url_for('disciplines.index') }}">Disciplinas</a>.</div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><div class="card-title">Disponibilidade (escala 12x36)</div></div>
+    <div class="form-grid">
+      <div class="field"><label for="plantao_hours">Horas por plantao</label>
+        <input type="text" id="plantao_hours" name="plantao_hours" value="{{ settings.plantao_hours }}"></div>
+      <div class="field"><label for="folga_hours">Horas por folga</label>
+        <input type="text" id="folga_hours" name="folga_hours" value="{{ settings.folga_hours }}"></div>
+      <div class="field"><label for="plantoes_per_cycle">Plantoes por ciclo</label>
+        <input type="number" id="plantoes_per_cycle" name="plantoes_per_cycle" value="{{ settings.plantoes_per_cycle }}"></div>
+      <div class="field"><label for="folgas_per_cycle">Folgas por ciclo</label>
+        <input type="number" id="folgas_per_cycle" name="folgas_per_cycle" value="{{ settings.folgas_per_cycle }}"></div>
+    </div>
+    <div class="tiny dim">Usado apenas para exibir a capacidade estimada. Nao gera agenda nem obrigacao.</div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><div class="card-title">Revisao espacada</div></div>
+    <div class="form-grid">
+      <div class="field span-2">
+        <label for="review_intervals">Intervalos (dias, separados por virgula)</label>
+        <input type="text" id="review_intervals" name="review_intervals" value="{{ settings.review_intervals }}">
+      </div>
+      <div class="field"><label for="review_difficulty_easy_factor">Fator "facil"</label>
+        <input type="text" id="review_difficulty_easy_factor" name="review_difficulty_easy_factor" value="{{ settings.review_difficulty_easy_factor }}"></div>
+      <div class="field"><label for="review_difficulty_hard_factor">Fator "dificil"</label>
+        <input type="text" id="review_difficulty_hard_factor" name="review_difficulty_hard_factor" value="{{ settings.review_difficulty_hard_factor }}"></div>
+    </div>
+    <div class="tiny dim">
+      Ao concluir uma revisao, o proximo intervalo da lista e multiplicado pelo fator da
+      dificuldade informada. Simples e previsivel - voce pode sobrescrever qualquer data na fila.
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><div class="card-title">Simulados</div></div>
+    <div class="form-grid cols-3">
+      <div class="field">
+        <label for="mock_frequency">Frequencia</label>
+        <select id="mock_frequency" name="mock_frequency">
+          {% for key, label in frequencies.items() %}
+            <option value="{{ key }}" {% if settings.mock_frequency == key %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field"><label for="mock_default_minutes">Duracao padrao (min)</label>
+        <input type="text" id="mock_default_minutes" name="mock_default_minutes" value="{{ settings.mock_default_minutes }}"></div>
+      <div class="field"><label for="mock_default_questions">Questoes padrao</label>
+        <input type="number" id="mock_default_questions" name="mock_default_questions" value="{{ settings.mock_default_questions }}"></div>
+    </div>
+    <div class="tiny dim">A frequencia e apenas uma referencia: nenhum simulado e criado automaticamente.</div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><div class="card-title">TAF, faculdade e questoes</div></div>
+    <div class="form-grid">
+      <div class="field"><label for="taf_minutes_per_cycle">TAF por ciclo (min)</label>
+        <input type="text" id="taf_minutes_per_cycle" name="taf_minutes_per_cycle" value="{{ settings.taf_minutes_per_cycle }}"></div>
+      <div class="field"><label for="college_hours_per_week">Faculdade (h/semana)</label>
+        <input type="text" id="college_hours_per_week" name="college_hours_per_week" value="{{ settings.college_hours_per_week }}"></div>
+      <div class="field"><label for="questions_split_new">Questoes de assunto novo</label>
+        <input type="number" id="questions_split_new" name="questions_split_new" value="{{ settings.questions_split_new }}"></div>
+      <div class="field"><label for="questions_split_review">Questoes de revisao</label>
+        <input type="number" id="questions_split_review" name="questions_split_review" value="{{ settings.questions_split_review }}"></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><div class="card-title">Limiares de desempenho</div></div>
+    <div class="form-grid cols-2">
+      <div class="field"><label for="performance_low">Critico abaixo de (%)</label>
+        <input type="text" id="performance_low" name="performance_low" value="{{ settings.performance_low }}"></div>
+      <div class="field"><label for="performance_mid">Atencao abaixo de (%)</label>
+        <input type="text" id="performance_mid" name="performance_mid" value="{{ settings.performance_mid }}"></div>
+    </div>
+    <div class="tiny dim">Controlam as cores e as sugestoes de ajuste do ciclo.</div>
+  </section>
+
+  <section class="card">
+    <div class="form-actions"><button class="btn primary" type="submit">Salvar configuracoes</button></div>
+  </section>
+</form>
+
+<section class="card" id="demo">
+  <div class="card-head"><div class="card-title">Dados de demonstracao</div></div>
+  {% if demo %}
+    <p class="muted">
+      Existem dados de demonstracao no sistema (marcados com a etiqueta <span class="badge demo">demo</span>).
+      Remova-os quando quiser comecar limpo - suas disciplinas, configuracoes e o ciclo permanecem.
+    </p>
+    <form method="post" action="{{ url_for('settings.demo') }}"
+          data-confirm="Remover todos os dados de demonstracao?">
+      <input type="hidden" name="action" value="clear">
+      <button class="btn danger" type="submit">Remover dados de demonstracao</button>
+    </form>
+  {% else %}
+    <p class="muted">Nenhum dado de demonstracao no sistema.</p>
+    <form method="post" action="{{ url_for('settings.demo') }}">
+      <input type="hidden" name="action" value="seed">
+      <button class="btn" type="submit">Inserir dados de demonstracao</button>
+    </form>
+  {% endif %}
+</section>
+
+<section class="card">
+  <div class="card-head"><div class="card-title">Banco de dados</div></div>
+  <div class="stack small muted">
+    <div><strong>Arquivo:</strong> <span class="mono">{{ database }}</span></div>
+    <div><strong>Backups:</strong> <span class="mono">{{ backup_dir }}</span></div>
+  </div>
+  <div class="form-actions mt">
+    <a class="btn" href="{{ url_for('data.index') }}">Backup, exportacao e importacao</a>
+  </div>
+</section>
+{% endblock %}

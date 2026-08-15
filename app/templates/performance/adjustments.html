@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% from "partials/_macros.html" import accuracy %}
+
+{% block title %}Sugestoes de ajuste - Sistema PRF{% endblock %}
+{% block heading %}Sugestoes de ajuste do ciclo{% endblock %}
+{% block subtitle %}<div class="subtitle">O sistema recomenda; quem decide e voce. Nada muda sozinho.</div>{% endblock %}
+
+{% block topbar_actions %}
+  {% for option in [30, 60, 90, 180] %}
+    <a class="btn sm {{ 'primary' if option == days }}" href="{{ url_for('performance.adjustments', days=option) }}">{{ option }}d</a>
+  {% endfor %}
+{% endblock %}
+
+{% block content %}
+<section class="card">
+  <div class="row">
+    <div class="metric">
+      <div class="label">Soma das metas atuais</div>
+      <div class="value">{{ totals.target_total|minutes }}</div>
+    </div>
+    <div class="metric">
+      <div class="label">Meta do ciclo</div>
+      <div class="value">{{ totals.goal|minutes }}</div>
+    </div>
+    <div class="metric">
+      <div class="label">Diferenca</div>
+      <div class="value {{ 'text-warn' if totals.delta > 0 else ('text-good' if totals.delta == 0 else '') }}">
+        {{ totals.delta|minutes }}
+      </div>
+    </div>
+    <div class="spacer"></div>
+    <a class="btn" href="{{ url_for('cycles.build') }}">Aplicar no ciclo (montar/regerar)</a>
+  </div>
+  <div class="tiny dim mt">
+    Aceitar uma sugestao altera apenas a META da disciplina. Os blocos do ciclo so mudam
+    quando voce regerar o ciclo na tela "Montar ciclo".
+  </div>
+</section>
+
+<section class="card">
+  <div class="card-head">
+    <div class="card-title">Sugestoes</div>
+    <div class="spacer"></div>
+    <span class="tiny dim">passo de ajuste: {{ step }} minutos</span>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Disciplina</th><th class="right">Incidencia</th><th class="right">Acerto</th>
+          <th class="right">Simulado</th><th class="right">Questoes</th><th class="right">Tempo</th>
+          <th>Motivo</th><th class="right">Meta</th><th class="right">Decisao</th></tr>
+      </thead>
+      <tbody>
+        {% for s in suggestions %}
+          <tr>
+            <td>
+              <div class="strong">{{ s.name }}</div>
+              <div class="tiny dim">{{ s.priority }} &middot; {{ s.status|replace('_', ' ') }}
+                {% if s.stale_days is not none %}&middot; ha {{ s.stale_days }}d sem estudo{% endif %}</div>
+            </td>
+            <td class="right mono">{{ s.incidence|num(2) }}%</td>
+            <td class="right">{{ accuracy(s.accuracy) }}</td>
+            <td class="right">
+              {% if s.mock_accuracy is not none %}
+                {{ accuracy(s.mock_accuracy) }}
+                <div class="tiny dim">{{ s.mock_date|date_br }}</div>
+              {% else %}<span class="dim">-</span>{% endif %}
+            </td>
+            <td class="right mono">{{ s.questions }}</td>
+            <td class="right nowrap">{{ s.minutes|minutes }}</td>
+            <td class="muted small">{{ s.reasons|join(' ') }}</td>
+            <td class="right nowrap mono">
+              {{ s.current_target }}
+              {% if s.delta %}
+                <span class="{{ 'text-bad' if s.delta > 0 else 'text-good' }}">→ {{ s.suggested_target }}</span>
+              {% endif %}
+            </td>
+            <td class="actions nowrap">
+              {% if s.direction != 'manter' %}
+                <form method="post" action="{{ url_for('performance.apply_adjustment') }}" class="inline-form">
+                  <input type="hidden" name="next" value="{{ request.full_path }}">
+                  <input type="hidden" name="discipline_id" value="{{ s.id }}">
+                  <input type="hidden" name="minutes" value="{{ s.suggested_target }}">
+                  <button class="btn sm primary" type="submit">Aceitar</button>
+                </form>
+              {% else %}
+                <span class="badge">manter</span>
+              {% endif %}
+              <a class="btn sm ghost" href="{{ url_for('disciplines.detail', discipline_id=s.id) }}">Ajustar</a>
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="9" class="dim center">Sem dados suficientes para sugerir ajustes.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

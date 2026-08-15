@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% from "partials/_macros.html" import accuracy, delta %}
+
+{% block title %}Desempenho - Sistema PRF{% endblock %}
+{% block heading %}Desempenho{% endblock %}
+{% block subtitle %}<div class="subtitle">Ultimos {{ days }} dias &middot; limiares: abaixo de {{ thresholds.low|num }}% critico, abaixo de {{ thresholds.mid|num }}% atencao</div>{% endblock %}
+
+{% block topbar_actions %}
+  {% for option in [7, 14, 30, 60, 90, 180] %}
+    <a class="btn sm {{ 'primary' if option == days }}" href="{{ url_for('performance.index', days=option) }}">{{ option }}d</a>
+  {% endfor %}
+{% endblock %}
+
+{% block content %}
+<div class="grid cols-4">
+  <div class="card"><div class="metric">
+    <div class="label">Horas estudadas</div><div class="value">{{ overall.minutes|minutes }}</div>
+    <div class="hint">{{ overall.sessions }} sessoes</div></div></div>
+  <div class="card"><div class="metric">
+    <div class="label">Questoes</div><div class="value">{{ overall.questions }}</div>
+    <div class="hint">{{ delta(evolution.questions_delta, '') }} vs periodo anterior</div></div></div>
+  <div class="card"><div class="metric">
+    <div class="label">Media de acerto</div>
+    <div class="value">{{ overall.accuracy|pct(0) if overall.accuracy is not none else '-' }}</div>
+    <div class="hint">{{ delta(evolution.accuracy_delta) }} vs periodo anterior</div></div></div>
+  <div class="card"><div class="metric">
+    <div class="label">Simulados</div><div class="value">{{ overall.mocks }}</div>
+    <div class="hint">no periodo</div></div></div>
+</div>
+
+<section class="card">
+  <div class="card-head"><div class="card-title">Volume diario</div>
+    <div class="spacer"></div><span class="tiny dim">barras: minutos &middot; linha: acerto do dia</span></div>
+  {% set w = 900 %}{% set h = 180 %}
+  {% set maxmin = (series|map(attribute='minutes')|max) or 60 %}
+  {% set bw = (w - 40) / (series|length) %}
+  <svg class="chart" viewBox="0 0 {{ w }} {{ h }}" preserveAspectRatio="none" role="img"
+       aria-label="Minutos estudados por dia">
+    <line class="axis" x1="30" y1="{{ h - 20 }}" x2="{{ w - 5 }}" y2="{{ h - 20 }}"></line>
+    {% for point in series %}
+      {% set bh = (point.minutes / maxmin * (h - 40)) if maxmin else 0 %}
+      <rect class="bar-rect" x="{{ 30 + loop.index0 * bw }}" y="{{ h - 20 - bh }}"
+            width="{{ (bw - 2)|round(2) }}" height="{{ bh|round(2) }}" rx="1">
+        <title>{{ point.date }}: {{ point.minutes }} min, {{ point.questions }} questoes</title>
+      </rect>
+    {% endfor %}
+    <text x="0" y="14">{{ maxmin }} min</text>
+    <text x="0" y="{{ h - 24 }}">0</text>
+  </svg>
+</section>
+
+<div class="grid cols-2">
+  <section class="card">
+    <div class="card-head"><div class="card-title">Por disciplina</div></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Disciplina</th><th class="right">Tempo</th><th class="right">Questoes</th>
+          <th class="right">Acerto</th><th class="right">Variacao</th></tr></thead>
+        <tbody>
+          {% set evo = {} %}
+          {% for e in discipline_evolution %}{% set _ = evo.update({e.id: e.delta}) %}{% endfor %}
+          {% for row in by_discipline %}
+            <tr>
+              <td>
+                <a href="{{ url_for('disciplines.detail', discipline_id=row.id) }}">{{ row.short_name }}</a>
+                <div class="tiny dim">incidencia {{ row.incidence|num(2) }}%</div>
+              </td>
+              <td class="right nowrap">{{ row.minutes|minutes }}</td>
+              <td class="right mono">{{ row.questions }}</td>
+              <td class="right">{{ accuracy(row.accuracy, thresholds.low, thresholds.mid) }}</td>
+              <td class="right">{{ delta(evo.get(row.id)) }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head"><div class="card-title">Pontos fracos por assunto</div></div>
+    {% if weak_subjects %}
+      <div class="list">
+        {% for row in weak_subjects %}
+          <div class="list-item">
+            <span class="dot {{ row.accuracy|level(thresholds.low, thresholds.mid) }}"></span>
+            <div class="grow">
+              <div class="name">{{ row.short_name }} - {{ row.subject_name }}</div>
+              <div class="sub">{{ row.questions }} questoes &middot; ultimo registro {{ row.last_date|date_br }}</div>
+            </div>
+            {{ accuracy(row.accuracy, thresholds.low, thresholds.mid) }}
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="empty">Nenhum assunto abaixo do limiar com amostra suficiente.</div>
+    {% endif %}
+
+    {% if mistakes %}
+      <h3 class="mt-lg mb">Erros por categoria</h3>
+      {% set maxv = mistakes[0].total or 1 %}
+      {% for row in mistakes %}
+        <div class="hbar">
+          <span class="label" title="{{ mistake_categories.get(row.category, row.category) }}">
+            {{ row.category }} - {{ mistake_categories.get(row.category, '') }}</span>
+          <span class="bar"><span style="width: {{ (row.total / maxv * 100)|round(1) }}%"></span></span>
+          <span class="value">{{ row.total }}</span>
+        </div>
+      {% endfor %}
+    {% endif %}
+  </section>
+</div>
+
+<section class="card">
+  <div class="card-head"><div class="card-title">Todos os assuntos com registro</div>
+    <div class="spacer"></div><span class="tiny dim">ordenado do pior para o melhor</span></div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Disciplina</th><th>Assunto</th><th class="right">Questoes</th>
+        <th class="right">Acerto</th><th class="right">Ultimo registro</th></tr></thead>
+      <tbody>
+        {% for row in by_subject %}
+          <tr>
+            <td class="strong">{{ row.short_name }}</td>
+            <td>{{ row.subject_name }}</td>
+            <td class="right mono">{{ row.questions }}</td>
+            <td class="right">{{ accuracy(row.accuracy, thresholds.low, thresholds.mid) }}</td>
+            <td class="right muted nowrap">{{ row.last_date|date_br }}</td>
+          </tr>
+        {% else %}
+          <tr><td colspan="5" class="dim center">Sem questoes registradas por assunto no periodo.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

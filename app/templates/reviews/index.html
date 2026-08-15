@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+{% from "partials/_macros.html" import discipline_select, subject_fields %}
+
+{% block title %}Revisoes - Sistema PRF{% endblock %}
+{% block heading %}Fila de revisoes{% endblock %}
+{% block subtitle %}<div class="subtitle">Fila, nao agenda. Nada e criado no calendario e nada vira tarefa atrasada automatica.</div>{% endblock %}
+
+{% block content %}
+<div class="grid cols-4">
+  <div class="card"><div class="metric"><div class="label">Na fila hoje</div><div class="value">{{ counts.due }}</div></div></div>
+  <div class="card"><div class="metric"><div class="label">Atrasadas</div><div class="value {{ 'text-bad' if counts.late }}">{{ counts.late }}</div></div></div>
+  <div class="card"><div class="metric"><div class="label">Proximos 7 dias</div><div class="value">{{ counts.week }}</div></div></div>
+  <div class="card"><div class="metric"><div class="label">Total pendente</div><div class="value">{{ counts.total }}</div>
+    <div class="hint">intervalos: {{ intervals|join(', ') }} dias</div></div></div>
+</div>
+
+<section class="card">
+  <div class="card-head">
+    <div class="card-title">Revisar agora</div>
+    <div class="spacer"></div>
+    <span class="tiny dim">Concluir agenda automaticamente a proxima</span>
+  </div>
+  {% if due %}
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th></th><th>Assunto</th><th>Vencimento</th><th>Metodo</th><th class="right">Revisao</th>
+            <th style="width:340px">Concluir</th></tr>
+        </thead>
+        <tbody>
+          {% for r in due %}
+            <tr>
+              <td><span class="dot {{ 'bad' if r.urgency == 'atrasada' else 'warn' }}"></span></td>
+              <td>
+                <div class="strong">{{ r.short_name }} - {{ r.subject_name or r.title or 'Revisao' }}</div>
+                <div class="tiny dim">origem {{ r.origin_date|date_br }} &middot; intervalo {{ r.interval_days }}d</div>
+              </td>
+              <td class="nowrap muted">{{ r.next_date|date_br }}{% if r.urgency == 'atrasada' %} <span class="badge bad">atrasada</span>{% endif %}</td>
+              <td class="muted small">{{ r.method|replace('_', ' ') }}</td>
+              <td class="right mono">{{ r.times_done }}</td>
+              <td>
+                <form method="post" action="{{ url_for('reviews.complete', review_id=r.id) }}" class="row tight">
+                  <input type="hidden" name="next" value="{{ request.full_path }}">
+                  <select name="difficulty" style="width:auto">
+                    {% for key, label in difficulties.items() %}
+                      <option value="{{ key }}" {% if r.difficulty == key %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                  </select>
+                  <select name="method" style="width:auto">
+                    {% for key, label in methods.items() %}
+                      <option value="{{ key }}" {% if r.method == key %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                  </select>
+                  <button class="btn sm primary" type="submit">Concluir</button>
+                </form>
+                <div class="row tight mt">
+                  <form method="post" action="{{ url_for('reviews.snooze', review_id=r.id) }}" class="inline-form">
+                    <input type="hidden" name="next" value="{{ request.full_path }}">
+                    <input type="hidden" name="days" value="1">
+                    <button class="btn sm ghost" type="submit">+1 dia</button>
+                  </form>
+                  <form method="post" action="{{ url_for('reviews.snooze', review_id=r.id) }}" class="inline-form">
+                    <input type="hidden" name="next" value="{{ request.full_path }}">
+                    <input type="hidden" name="days" value="3">
+                    <button class="btn sm ghost" type="submit">+3 dias</button>
+                  </form>
+                  <form method="post" action="{{ url_for('reviews.archive', review_id=r.id) }}" class="inline-form">
+                    <input type="hidden" name="next" value="{{ request.full_path }}">
+                    <button class="btn sm ghost" type="submit">Consolidado</button>
+                  </form>
+                  <form method="post" action="{{ url_for('reviews.delete', review_id=r.id) }}"
+                        class="inline-form" data-confirm="Excluir esta revisao?">
+                    <input type="hidden" name="next" value="{{ request.full_path }}">
+                    <button class="btn sm danger" type="submit">Excluir</button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="empty">Fila vazia. Nada vencido.</div>
+  {% endif %}
+</section>
+
+<section class="card">
+  <div class="card-head"><div class="card-title">Proximas revisoes</div></div>
+  {% if upcoming %}
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Assunto</th><th>Data</th><th>Metodo</th><th>Dificuldade</th><th class="right">Ajustar</th></tr></thead>
+        <tbody>
+          {% for r in upcoming %}
+            <tr>
+              <td class="strong">{{ r.short_name }} - {{ r.subject_name or r.title }}</td>
+              <td class="muted nowrap">{{ r.next_date|date_br }}</td>
+              <td class="muted small">{{ r.method|replace('_', ' ') }}</td>
+              <td class="muted small">{{ r.difficulty }}</td>
+              <td class="actions">
+                <details class="box" style="margin:0; text-align:left">
+                  <summary>Editar</summary>
+                  <form method="post" action="{{ url_for('reviews.update', review_id=r.id) }}">
+                    <input type="hidden" name="next" value="{{ request.full_path }}">
+                    <div class="form-grid cols-2">
+                      <div class="field"><label>Titulo</label>
+                        <input type="text" name="title" value="{{ r.title }}"></div>
+                      <div class="field"><label>Proxima data</label>
+                        <input type="date" name="next_date" value="{{ r.next_date }}"></div>
+                      <div class="field"><label>Intervalo (dias)</label>
+                        <input type="number" name="interval_days" value="{{ r.interval_days }}" min="1"></div>
+                      <div class="field"><label>Metodo</label>
+                        <select name="method">
+                          {% for key, label in methods.items() %}
+                            <option value="{{ key }}" {% if r.method == key %}selected{% endif %}>{{ label }}</option>
+                          {% endfor %}
+                        </select></div>
+                      <div class="field"><label>Dificuldade</label>
+                        <select name="difficulty">
+                          {% for key, label in difficulties.items() %}
+                            <option value="{{ key }}" {% if r.difficulty == key %}selected{% endif %}>{{ label }}</option>
+                          {% endfor %}
+                        </select></div>
+                      <div class="field"><label>Observacao</label>
+                        <input type="text" name="notes" value="{{ r.notes }}"></div>
+                    </div>
+                    <div class="form-actions"><button class="btn sm primary" type="submit">Salvar</button></div>
+                  </form>
+                </details>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="empty">Nenhuma revisao agendada para os proximos dias.</div>
+  {% endif %}
+</section>
+
+<section class="card">
+  <div class="card-head"><div class="card-title">Criar revisao manualmente</div></div>
+  <form method="post" action="{{ url_for('reviews.create') }}">
+    <input type="hidden" name="next" value="{{ request.full_path }}">
+    <div class="form-grid">
+      {{ discipline_select(disciplines, target='rev-subject', required=true) }}
+      {{ subject_fields(subjects, target='rev-subject') }}
+      <div class="field">
+        <label for="title">Titulo (opcional)</label>
+        <input type="text" id="title" name="title">
+      </div>
+      <div class="field">
+        <label for="origin_date">Data de origem</label>
+        <input type="date" id="origin_date" name="origin_date" value="{{ today }}">
+      </div>
+      <div class="field">
+        <label for="first_interval">Primeiro intervalo (dias)</label>
+        <input type="number" id="first_interval" name="first_interval" value="{{ intervals[0] }}" min="1">
+      </div>
+      <div class="field">
+        <label for="method">Metodo</label>
+        <select id="method" name="method">
+          {% for key, label in methods.items() %}<option value="{{ key }}">{{ label }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="difficulty">Dificuldade</label>
+        <select id="difficulty" name="difficulty">
+          {% for key, label in difficulties.items() %}
+            <option value="{{ key }}" {% if key == 'media' %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field span-2">
+        <label for="notes">Observacao</label>
+        <input type="text" id="notes" name="notes">
+      </div>
+    </div>
+    <div class="form-actions"><button class="btn primary" type="submit">Criar revisao</button></div>
+  </form>
+</section>
+
+{% if archived %}
+  <details class="box">
+    <summary>Revisoes arquivadas ({{ archived|length }})</summary>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Assunto</th><th>Ultima data</th><th class="right">Acoes</th></tr></thead>
+        <tbody>
+          {% for r in archived %}
+            <tr>
+              <td>{{ r.discipline_name }} - {{ r.subject_name or r.title }}</td>
+              <td class="muted">{{ r.next_date|date_br }}</td>
+              <td class="actions">
+                <form method="post" action="{{ url_for('reviews.reactivate', review_id=r.id) }}" class="inline-form">
+                  <input type="hidden" name="next" value="{{ request.full_path }}">
+                  <button class="btn sm ghost" type="submit">Reativar</button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </details>
+{% endif %}
+{% endblock %}
