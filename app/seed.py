@@ -139,8 +139,8 @@ def _insert_blocks(conn: sqlite3.Connection, cycle_id: int, plan: list[dict]) ->
 # --------------------------------------------------------------------------
 def has_demo(conn: sqlite3.Connection) -> bool:
     tables = ["subjects", "study_sessions", "questions", "mistakes", "reviews",
-              "mock_exams", "taf_workouts", "taf_measurements", "college_subjects",
-              "college_tasks", "college_sessions"]
+              "mock_exams", "taf_workouts", "taf_workout_sessions", "taf_measurements",
+              "college_subjects", "college_tasks", "college_sessions"]
     for table in tables:
         if conn.execute(f"SELECT COUNT(*) FROM {table} WHERE is_demo = 1").fetchone()[0]:
             return True
@@ -153,13 +153,121 @@ def clear_demo(conn: sqlite3.Connection) -> None:
         conn.execute(
             f"DELETE FROM {table} WHERE mock_exam_id IN"
             " (SELECT id FROM mock_exams WHERE is_demo = 1)")
-    for table in ["questions", "mistakes", "reviews", "study_sessions", "mock_exams",
-                  "taf_measurements", "taf_workouts", "college_tasks", "college_sessions",
+    # Filhos antes dos pais: as FKs sao ON DELETE CASCADE, mas a ordem explicita
+    # deixa claro o que esta sendo removido.
+    for table in ["taf_session_sets", "taf_session_exercises", "taf_workout_sessions",
+                  "taf_workout_exercises", "taf_workouts",
+                  "questions", "mistakes", "reviews", "study_sessions", "mock_exams",
+                  "taf_measurements", "college_tasks", "college_sessions",
                   "college_subjects", "subjects"]:
         conn.execute(f"DELETE FROM {table} WHERE is_demo = 1")
     conn.execute("UPDATE cycle_blocks SET subject_id = NULL WHERE subject_id NOT IN"
                  " (SELECT id FROM subjects)")
     conn.commit()
+
+
+def _seed_demo_workouts(conn: sqlite3.Connection, day, today) -> None:
+    """Dois planos com exercicios e algumas execucoes, no modelo novo.
+
+    Mostra o ponto central do modulo: prescricao (o previsto) ao lado do que foi
+    realmente feito serie a serie.
+    """
+    planos = [
+        {
+            "name": "Treino A - Corrida",
+            "objective": "Ganhar folego para os 12 minutos do TAF",
+            "type": "corrida", "duration": 50,
+            "notes": "Aquecer 10 min antes do intervalado.",
+            "exercises": [
+                ("Aquecimento leve", "corrida", dict(sets=1, total_seconds=600,
+                 goal="10 minutos continuos")),
+                ("Intervalado 6x400m", "intervalado", dict(sets=6, distance_km=0.4,
+                 rest_seconds=90, goal="400m abaixo de 1min45")),
+                ("Desaquecimento", "caminhada", dict(sets=1, total_seconds=300, goal="5 minutos")),
+            ],
+        },
+        {
+            "name": "Treino B - Forca",
+            "objective": "Desenvolver forca de membros superiores para o TAF",
+            "type": "forca", "duration": 45,
+            "notes": "Priorizar execucao correta.",
+            "exercises": [
+                ("Barra fixa", "calistenia", dict(sets=4, reps=6, rest_seconds=90,
+                 goal="24 repeticoes")),
+                ("Flexao de bracos", "calistenia", dict(sets=4, reps=15, rest_seconds=60,
+                 goal="60 repeticoes")),
+                ("Abdominal", "core", dict(sets=4, reps=20, rest_seconds=45,
+                 goal="80 repeticoes")),
+                ("Prancha", "core", dict(sets=4, seconds_per_set=45, rest_seconds=30,
+                 goal="4x45 segundos")),
+            ],
+        },
+    ]
+
+    ids: dict[str, int] = {}
+    exercicios: dict[str, list[tuple[int, dict]]] = {}
+    for plano in planos:
+        cur = conn.execute(
+            "INSERT INTO taf_workouts (name, objective, type, duration_minutes, start_date,"
+            " end_date, status, notes, is_demo) VALUES (?, ?, ?, ?, ?, ?, 'ativo', ?, 1)",
+            (plano["name"], plano["objective"], plano["type"], plano["duration"],
+             day(30), to_iso(today + timedelta(days=30)), plano["notes"]))
+        workout_id = cur.lastrowid
+        ids[plano["name"]] = workout_id
+        exercicios[plano["name"]] = []
+        for posicao, (nome, categoria, campos) in enumerate(plano["exercises"], start=1):
+            cur = conn.execute(
+                "INSERT INTO taf_workout_exercises (workout_id, position, name, category,"
+                " sets, reps, seconds_per_set, distance_km, total_seconds, rest_seconds,"
+                " goal, is_demo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)",
+                (workout_id, posicao, nome, categoria, campos.get("sets"),
+                 campos.get("reps"), campos.get("seconds_per_set"), campos.get("distance_km"),
+                 campos.get("total_seconds"), campos.get("rest_seconds"),
+                 campos.get("goal", "")))
+            exercicios[plano["name"]].append((cur.lastrowid, campos))
+
+    # Execucoes: a de 3 dias atras mostra queda de rendimento nas ultimas series.
+    execucoes = [
+        ("Treino B - Forca", 9, 45, [(6, 6, 5, 4), (15, 14, 12, 10), (20, 20, 18, 15), None]),
+        ("Treino A - Corrida", 7, 52, None),
+        ("Treino B - Forca", 3, 44, [(6, 6, 6, 5), (15, 15, 14, 12), (20, 20, 20, 18), None]),
+    ]
+    for nome, offset, duracao, resultados in execucoes:
+        workout_id = ids[nome]
+        cur = conn.execute(
+            "INSERT INTO taf_workout_sessions (workout_id, workout_name, date, started_at,"
+            " finished_at, duration_minutes, status, is_demo)"
+            " VALUES (?, ?, ?, ?, ?, ?, 'concluida', 1)",
+            (workout_id, nome, day(offset), day(offset), day(offset), duracao))
+        session_id = cur.lastrowid
+
+        for posicao, (exercise_id, campos) in enumerate(exercicios[nome], start=1):
+            item = conn.execute(
+                "SELECT * FROM taf_workout_exercises WHERE id = ?", (exercise_id,)).fetchone()
+            cur = conn.execute(
+                "INSERT INTO taf_session_exercises (session_id, workout_exercise_id, position,"
+                " name, category, planned_sets, planned_reps, planned_seconds,"
+                " planned_distance_km, rest_seconds, goal, status, is_demo)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'concluido', 1)",
+                (session_id, exercise_id, posicao, item["name"], item["category"],
+                 item["sets"], item["reps"], item["seconds_per_set"], item["distance_km"],
+                 item["rest_seconds"], item["goal"]))
+            session_exercise_id = cur.lastrowid
+
+            series = None
+            if resultados and posicao <= len(resultados):
+                series = resultados[posicao - 1]
+            for numero in range(1, (item["sets"] or 1) + 1):
+                reps = None
+                if series and numero <= len(series):
+                    reps = series[numero - 1]
+                elif item["reps"]:
+                    reps = item["reps"]
+                conn.execute(
+                    "INSERT INTO taf_session_sets (session_exercise_id, set_number, reps,"
+                    " seconds, distance_km, is_demo) VALUES (?, ?, ?, ?, ?, 1)",
+                    (session_exercise_id, numero, reps, item["seconds_per_set"],
+                     item["distance_km"]))
 
 
 def seed_demo(conn: sqlite3.Connection) -> None:
@@ -323,24 +431,7 @@ def seed_demo(conn: sqlite3.Connection) -> None:
             "UPDATE taf_tests SET current_mark = ?, measured_at = ? WHERE id = ?",
             (last_value, day(last_offset), row["id"]))
 
-    workouts = [
-        (9, "Treino A - Corrida", "corrida", 50, "Aquecimento + intervalado 6x400m",
-         None, None, 6.0, "concluido"),
-        (7, "Treino B - Forca", "forca", 45, "Barra + flexao + abdominal", 4, 8, None,
-         "concluido"),
-        (5, "Treino A - Corrida", "corrida", 55, "Continuo 8km leve", None, None, 8.0,
-         "concluido"),
-        (3, "Treino B - Forca", "forca", 45, "Barra negativa + flexao", 4, 10, None,
-         "pendente"),
-        (-1, "Treino A - Corrida", "corrida", 50, "Intervalado 8x400m", None, None, 6.5,
-         "planejado"),
-        (-3, "Treino B - Forca", "forca", 45, "Circuito TAF", 4, 10, None, "planejado"),
-    ]
-    for offset, name, kind, duration, exercise, sets, reps, distance, status in workouts:
-        conn.execute(
-            "INSERT INTO taf_workouts (date, name, type, duration_minutes, exercise, sets, reps,"
-            " distance_km, status, is_demo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)",
-            (day(offset), name, kind, duration, exercise, sets, reps, distance, status))
+    _seed_demo_workouts(conn, day, today)
 
     college = [("Metodologia Cientifica", "Prof. Silva"), ("Estatistica Aplicada", "Prof. Souza")]
     college_ids = []

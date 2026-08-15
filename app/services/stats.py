@@ -198,8 +198,11 @@ def today_summary(reference: str | None = None) -> dict:
     row = query_one(
         "SELECT COALESCE(SUM(total), 0) AS total, COALESCE(SUM(correct), 0) AS correct"
         " FROM questions WHERE date = ?", (day,))
+    # Treino de hoje: a execucao do dia, se houver.
     workout = query_one(
-        "SELECT * FROM taf_workouts WHERE date = ? ORDER BY id LIMIT 1", (day,))
+        "SELECT * FROM taf_workout_sessions WHERE date = ?"
+        " ORDER BY CASE status WHEN 'em_andamento' THEN 0 ELSE 1 END, id DESC LIMIT 1",
+        (day,))
     total_q = int(row["total"] or 0)
     return {
         "date": day,

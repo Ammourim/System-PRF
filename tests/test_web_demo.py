@@ -10,7 +10,7 @@ from app.seed import seed_demo
 def _all_pages(client, app):
     urls = ["/", "/ciclo/", "/ciclo/montar", "/sessoes/", "/sessoes/nova", "/questoes/",
             "/revisoes/", "/erros/", "/simulados/", "/simulados/cronometro", "/desempenho/",
-            "/desempenho/ajustes", "/disciplinas/", "/taf/", "/taf/treinos", "/faculdade/",
+            "/desempenho/ajustes", "/disciplinas/", "/taf/", "/taf/treinos/", "/faculdade/",
             "/configuracoes/", "/dados/"]
     with app.app_context():
         for row in query_all("SELECT id FROM disciplines LIMIT 3"):
@@ -23,6 +23,14 @@ def _all_pages(client, app):
             urls.append(f"/sessoes/{row['id']}/editar")
         for row in query_all("SELECT id FROM questions LIMIT 3"):
             urls.append(f"/questoes/{row['id']}")
+        for row in query_all("SELECT id FROM taf_workouts"):
+            urls.append(f"/taf/treinos/{row['id']}")
+        for row in query_all("SELECT id FROM taf_workout_exercises LIMIT 3"):
+            urls.append(f"/taf/treinos/exercicios/{row['id']}/editar")
+        for row in query_all("SELECT id FROM taf_workout_sessions"):
+            urls.append(f"/taf/treinos/execucao/{row['id']}/resumo")
+        for row in query_all("SELECT id FROM taf_workouts LIMIT 1"):
+            urls.append(f"/taf/treinos/{row['id']}/exercicios/novo")
     for url in urls:
         response = client.get(url)
         assert response.status_code == 200, f"{url} retornou {response.status_code}"
@@ -61,7 +69,8 @@ def test_filtros_das_listagens(client, app):
         "/erros/?discipline_id=1&category=C&status=aberto",
         "/erros/?all=1",
         "/revisoes/?days=30",
-        "/taf/treinos?start=2020-01-01&end=2030-01-01",
+        "/taf/treinos/",
+        "/taf/treinos/historico",
     ]
     for url in urls:
         assert client.get(url).status_code == 200, url

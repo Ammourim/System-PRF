@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+
+{% block title %}Resumo da execucao - Sistema PRF{% endblock %}
+{% block heading %}{{ session.workout_name }}{% endblock %}
+{% block subtitle %}
+  <div class="subtitle">{{ session.date|date_br }} &middot; {{ statuses.get(session.status, session.status) }}
+    {%- if session.duration_minutes %} &middot; {{ session.duration_minutes }} min{% endif %}</div>
+{% endblock %}
+{% block topbar_actions %}
+  <a class="btn ghost" href="{{ url_for('workouts.history') }}">Historico</a>
+  {% if session.workout_id %}
+    <a class="btn" href="{{ url_for('workouts.detail', workout_id=session.workout_id) }}">Ver treino</a>
+  {% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="grid cols-4">
+  <div class="card"><div class="metric">
+    <div class="label">Exercicios</div>
+    <div class="value">{{ done_exercises }}/{{ total_exercises }}</div>
+    <div class="hint">concluidos</div></div></div>
+  <div class="card"><div class="metric">
+    <div class="label">Series</div>
+    <div class="value">{{ sets_done }}/{{ sets_planned or '-' }}</div>
+    <div class="hint">realizadas / previstas</div></div></div>
+  <div class="card"><div class="metric">
+    <div class="label">Cumprimento</div>
+    <div class="value">{{ pct|num if pct is not none else '-' }}%</div>
+    <div class="hint">das series previstas</div></div></div>
+  <div class="card"><div class="metric">
+    <div class="label">Duracao</div>
+    <div class="value">{{ session.duration_minutes }} min</div>
+    <div class="hint">{{ session.date|date_br }}</div></div></div>
+</div>
+
+{% if session.notes %}
+  <section class="card"><div class="card-head"><div class="card-title">Observacoes</div></div>
+    <p class="muted">{{ session.notes }}</p></section>
+{% endif %}
+
+<section class="card">
+  <div class="card-head">
+    <div class="card-title">Prescrito x realizado</div>
+    <div class="spacer"></div>
+    <span class="tiny dim">o que estava previsto e o que voce fez de verdade</span>
+  </div>
+
+  {% for item in exercises %}
+    {% set e = item.exercise %}{% set p = item.progress %}
+    <div class="card flat" style="margin-bottom:10px">
+      <div class="row">
+        <span class="badge {{ 'good' if e.status == 'concluido' else ('warn' if e.status == 'pulado' else '') }}">{{ e.position }}</span>
+        <div class="grow">
+          <div class="strong">{{ e.name }}</div>
+          <div class="tiny dim">
+            Prescrito:
+            {%- if e.planned_sets %} {{ e.planned_sets }} serie(s){% endif %}
+            {%- if e.planned_reps %} x {{ e.planned_reps }} rep{% endif %}
+            {%- if e.planned_seconds %} x {{ e.planned_seconds }}s{% endif %}
+            {%- if e.planned_distance_km %} x {{ e.planned_distance_km|num }} km{% endif %}
+            {%- if e.goal %} &middot; meta: {{ e.goal }}{% endif %}
+          </div>
+        </div>
+        <div class="right">
+          <div class="strong {{ 'text-good' if p.pct and p.pct >= 100 else ('text-warn' if p.pct and p.pct >= 60 else ('text-bad' if p.pct else '')) }}">
+            {{ p.achieved }}/{{ p.target or '-' }} {{ p.unit }}
+          </div>
+          <div class="tiny dim">{{ p.sets_done }}/{{ p.sets_planned or '?' }} series</div>
+        </div>
+      </div>
+
+      {% if p.sets %}
+        <div class="run-sets mt">
+          {% for s in p.sets %}
+            <div class="run-set-row">
+              <span class="badge">Serie {{ s.set_number }}</span>
+              <span class="grow">
+                {% if s.reps %}{{ s.reps }} rep{% endif %}
+                {%- if s.seconds %} {{ s.seconds }}s{% endif %}
+                {%- if s.distance_km %} {{ s.distance_km|num }} km{% endif %}
+                {%- if s.notes %} <span class="dim">- {{ s.notes }}</span>{% endif %}
+              </span>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="tiny dim mt">Nenhuma serie registrada.</div>
+      {% endif %}
+    </div>
+  {% else %}
+    <div class="empty">Nenhum exercicio nesta execucao.</div>
+  {% endfor %}
+</section>
+
+<section class="card">
+  <form method="post" action="{{ url_for('workouts.delete_session', session_id=session.id) }}"
+        data-confirm="Excluir esta execucao do historico? Nao da para desfazer.">
+    <input type="hidden" name="next" value="{{ url_for('workouts.history') }}">
+    <button class="btn danger" type="submit">Excluir esta execucao</button>
+  </form>
+</section>
+{% endblock %}

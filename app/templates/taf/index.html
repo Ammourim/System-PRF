@@ -4,7 +4,7 @@
 {% block title %}TAF - Sistema PRF{% endblock %}
 {% block heading %}TAF{% endblock %}
 {% block subtitle %}<div class="subtitle">Organizador de treino e acompanhamento de marcas. Nao e prescricao de treino nem orientacao medica.</div>{% endblock %}
-{% block topbar_actions %}<a class="btn" href="{{ url_for('taf.workouts') }}">Todos os treinos</a>{% endblock %}
+{% block topbar_actions %}<a class="btn" href="{{ url_for('workouts.index') }}">Treinos</a>{% endblock %}
 
 {% block content %}
 <section class="card">
@@ -112,71 +112,67 @@
   </details>
 </section>
 
-{% if pending %}
-  <section class="card">
-    <div class="card-head"><div class="card-title">Treinos pendentes</div>
-      <div class="spacer"></div>
-      <span class="tiny dim">Nada e reagendado automaticamente</span></div>
-    <div class="list">
-      {% for w in pending %}
-        <div class="list-item">
-          <span class="dot warn"></span>
-          <div class="grow">
-            <div class="name">{{ w.name or w.type }}</div>
-            <div class="sub">{{ w.date|date_br }} &middot; {{ w.exercise|truncate(60) }}</div>
-          </div>
-          <form method="post" action="{{ url_for('taf.reschedule', workout_id=w.id) }}" class="row tight">
-            <input type="hidden" name="next" value="{{ request.full_path }}">
-            <input type="date" name="date" value="{{ today }}" style="width:auto">
-            <button class="btn sm" type="submit">Remarcar</button>
-          </form>
-          <form method="post" action="{{ url_for('taf.workout_status', workout_id=w.id) }}" class="inline-form">
-            <input type="hidden" name="next" value="{{ request.full_path }}">
-            <input type="hidden" name="status" value="concluido">
-            <button class="btn sm ghost" type="submit">Concluir</button>
-          </form>
-        </div>
-      {% endfor %}
+{% if open_session %}
+  <section class="card accent">
+    <div class="row">
+      <div class="grow">
+        <div class="card-title">Treino em andamento</div>
+        <div class="strong" style="font-size:18px">{{ open_session.workout_name }}</div>
+        <div class="muted small">iniciado em {{ open_session.date|date_br }}</div>
+      </div>
+      <a class="btn primary big" href="{{ url_for('workouts.run', session_id=open_session.id) }}">Retomar</a>
     </div>
   </section>
 {% endif %}
 
 <div class="grid cols-2">
   <section class="card">
-    <div class="card-head"><div class="card-title">Proximos treinos</div></div>
+    <div class="card-head">
+      <div class="card-title">Treinos vigentes hoje</div>
+      <div class="spacer"></div>
+      <a class="btn sm" href="{{ url_for('workouts.index') }}">Gerenciar</a>
+    </div>
     <div class="list">
-      {% for w in upcoming %}
+      {% for w in active_workouts %}
         <div class="list-item">
           <div class="grow">
-            <div class="name">{{ w.name or w.type }}</div>
-            <div class="sub">{{ w.date|date_br }} &middot; {{ w.duration_minutes }} min &middot; {{ w.exercise|truncate(50) }}</div>
+            <div class="name"><a href="{{ url_for('workouts.detail', workout_id=w.id) }}">{{ w.name }}</a></div>
+            <div class="sub">{{ w.exercise_count }} exercicio(s)
+              {%- if w.duration_minutes %} &middot; {{ w.duration_minutes }} min{% endif %}
+              {%- if w.objective %} &middot; {{ w.objective|truncate(40) }}{% endif %}</div>
           </div>
-          <form method="post" action="{{ url_for('taf.workout_status', workout_id=w.id) }}" class="inline-form">
-            <input type="hidden" name="next" value="{{ request.full_path }}">
-            <input type="hidden" name="status" value="concluido">
-            <button class="btn sm" type="submit">Concluir</button>
-          </form>
+          {% if w.exercise_count and not open_session %}
+            <form method="post" action="{{ url_for('workouts.start', workout_id=w.id) }}" class="inline-form">
+              <button class="btn sm primary" type="submit">Iniciar</button>
+            </form>
+          {% endif %}
         </div>
       {% else %}
-        <div class="empty">Nenhum treino planejado. <a href="{{ url_for('taf.workouts') }}">Planejar</a>.</div>
+        <div class="empty">Nenhum treino vigente hoje.
+          <a href="{{ url_for('workouts.index') }}">Cadastrar treino</a>.</div>
       {% endfor %}
     </div>
   </section>
 
   <section class="card">
-    <div class="card-head"><div class="card-title">Treinos concluidos</div></div>
+    <div class="card-head">
+      <div class="card-title">Execucoes recentes</div>
+      <div class="spacer"></div>
+      <a class="btn sm ghost" href="{{ url_for('workouts.history') }}">Historico</a>
+    </div>
     <div class="list">
-      {% for w in recent %}
+      {% for s in recent %}
         <div class="list-item">
           <span class="dot good"></span>
           <div class="grow">
-            <div class="name">{{ w.name or w.type }}</div>
-            <div class="sub">{{ w.date|date_br }} &middot; {{ w.duration_minutes }} min
-              {%- if w.distance_km %} &middot; {{ w.distance_km|num }} km{% endif %}</div>
+            <div class="name">{{ s.workout_name }}</div>
+            <div class="sub">{{ s.date|date_br }} &middot; {{ s.duration_minutes }} min
+              &middot; {{ s.done_exercises }}/{{ s.total_exercises }} exercicios</div>
           </div>
+          <a class="btn sm ghost" href="{{ url_for('workouts.session_detail', session_id=s.id) }}">Resumo</a>
         </div>
       {% else %}
-        <div class="empty">Nenhum treino concluido ainda.</div>
+        <div class="empty">Nenhum treino executado ainda.</div>
       {% endfor %}
     </div>
   </section>

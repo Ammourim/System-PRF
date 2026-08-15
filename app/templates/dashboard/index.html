@@ -238,11 +238,15 @@
         <div class="list-item">
           <div class="grow">
             <div class="name">TAF</div>
-            {% if next_workout %}<div class="sub">{{ next_workout.date|date_br }} - {{ next_workout.exercise or next_workout.type }}</div>{% endif %}
+            <div class="sub">
+              {% if today_summary.workout %}{{ today_summary.workout.status|replace('_', ' ') }}
+              {% elif active_workouts %}{{ active_workouts|length }} treino(s) vigente(s)
+              {% else %}nenhum treino vigente{% endif %}
+            </div>
           </div>
-          <div class="strong small">
-            {% if today_summary.workout %}{{ today_summary.workout.name or today_summary.workout.type }}
-            {% elif next_workout %}{{ next_workout.name or next_workout.type }}
+          <div class="strong small nowrap">
+            {% if today_summary.workout %}{{ today_summary.workout.workout_name|truncate(18) }}
+            {% elif active_workouts %}{{ active_workouts[0].name|truncate(18) }}
             {% else %}<span class="dim">-</span>{% endif %}
           </div>
         </div>
@@ -340,20 +344,20 @@
     </section>
 
     {# ------------------------------------------------------------ PENDENCIAS #}
-    {% if pending_workouts or college_due %}
+    {% if open_session or college_due %}
       <section class="card">
         <div class="card-head"><div class="card-title">Pendencias fora do ciclo</div></div>
         <div class="list">
-          {% for workout in pending_workouts %}
+          {% if open_session %}
             <div class="list-item">
               <span class="dot warn"></span>
               <div class="grow">
-                <div class="name">TAF - {{ workout.name or workout.type }}</div>
-                <div class="sub">{{ workout.date|date_br }} - treino pendente</div>
+                <div class="name">TAF - {{ open_session.workout_name }}</div>
+                <div class="sub">treino iniciado em {{ open_session.date|date_br }} e nao encerrado</div>
               </div>
-              <a class="btn sm ghost" href="{{ url_for('taf.index') }}">Reagendar</a>
+              <a class="btn sm primary" href="{{ url_for('workouts.run', session_id=open_session.id) }}">Retomar</a>
             </div>
-          {% endfor %}
+          {% endif %}
           {% for task in college_due %}
             <div class="list-item">
               <span class="dot {{ 'bad' if task.due_date and task.due_date < today else 'warn' }}"></span>

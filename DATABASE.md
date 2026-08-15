@@ -67,10 +67,38 @@ Simulado e desempenho por disciplina. O simulado guarda tambem a **estrategia de
 `perception`. `mock_exam_results` tem `UNIQUE (mock_exam_id, discipline_id)`, entao lancar
 a mesma disciplina duas vezes atualiza em vez de duplicar.
 
-### `taf_tests`, `taf_measurements`, `taf_workouts`
+### `taf_tests`, `taf_measurements`
 Testes do TAF com `unit`, `current_mark`, `goal_mark` e `higher_is_better` (0 quando menor
-e melhor, como tempo de corrida); o historico de marcas; e os treinos planejados
-(`status`: `planejado|concluido|pendente`).
+e melhor, como tempo de corrida), e o historico de marcas.
+
+### Treinos: plano, prescricao e execucao (migration 002)
+
+```text
+taf_workouts (PLANO)              nome, objetivo, tipo, duracao prevista, vigencia
+  └── taf_workout_exercises       PRESCRICAO: series, reps, tempo, distancia, descanso, meta
+
+taf_workout_sessions (EXECUCAO)   data, inicio, fim, duracao, status
+  └── taf_session_exercises       COPIA da prescricao no momento do inicio
+        └── taf_session_sets      RESULTADO real de cada serie
+```
+
+* **`taf_workouts`** e um plano reutilizavel com vigencia (`start_date`/`end_date`), nao um
+  agendamento unico. `status`: `ativo|arquivado`.
+* **`taf_workout_exercises`** guarda a prescricao. **Todos os campos numericos sao
+  opcionais** - corrida usa `distance_km`, prancha usa `seconds_per_set`, barra usa
+  `reps`. `category` e texto livre: novas categorias nao exigem migration.
+* **`taf_session_exercises` copia a prescricao** ao iniciar a sessao. Isso e deliberado:
+  editar ou apagar o plano depois **nao reescreve o historico**. A FK
+  `workout_exercise_id` e `ON DELETE SET NULL`, e o nome fica na copia.
+* **`taf_workout_sessions.workout_name`** guarda o nome do treino, entao excluir o plano
+  (FK `ON DELETE SET NULL`) deixa o historico legivel.
+* `taf_session_sets` tem `UNIQUE (session_exercise_id, set_number)`: corrigir uma serie
+  atualiza em vez de duplicar.
+
+A migration 002 converte os treinos do formato antigo: cada linha vira um plano mais um
+exercicio, e as que estavam `concluido` viram tambem uma sessao concluida - preservando a
+contagem do relatorio de ciclo. `tests/test_migration_002.py` exercita essa conversao com
+dados reais.
 
 ### `college_subjects`, `college_tasks`, `college_sessions`
 Faculdade, com planejamento independente do ciclo PRF.

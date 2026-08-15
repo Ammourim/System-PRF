@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% from "partials/_macros.html" import demo_tag %}
+
+{% block title %}Treinos - Sistema PRF{% endblock %}
+{% block heading %}Treinos{% endblock %}
+{% block subtitle %}<div class="subtitle">Primeiro cadastre o treino; depois entre nele e monte os exercicios.</div>{% endblock %}
+{% block topbar_actions %}
+  <a class="btn" href="{{ url_for('workouts.history') }}">Historico</a>
+  <a class="btn ghost" href="{{ url_for('taf.index') }}">TAF</a>
+{% endblock %}
+
+{% block content %}
+{% if open_session %}
+  <section class="card accent">
+    <div class="row">
+      <div class="grow">
+        <div class="card-title">Treino em andamento</div>
+        <div class="strong" style="font-size:18px">{{ open_session.workout_name }}</div>
+        <div class="muted small">iniciado em {{ open_session.date|date_br }}</div>
+      </div>
+      <a class="btn primary big" href="{{ url_for('workouts.run', session_id=open_session.id) }}">Retomar</a>
+    </div>
+  </section>
+{% endif %}
+
+<section class="card">
+  <div class="card-head">
+    <div class="card-title">Meus treinos</div>
+    <div class="spacer"></div>
+    <span class="tiny dim">{{ workouts|length }} cadastrado(s)</span>
+  </div>
+
+  {% if workouts %}
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>Treino</th><th>Tipo</th><th class="right">Exercicios</th>
+            <th>Vigencia</th><th class="right">Feitos</th><th>Status</th>
+            <th class="right">Acoes</th></tr>
+        </thead>
+        <tbody>
+          {% for w in workouts %}
+            <tr>
+              <td>
+                <div class="strong"><a href="{{ url_for('workouts.detail', workout_id=w.id) }}">{{ w.name }}</a> {{ demo_tag(w) }}</div>
+                {% if w.objective %}<div class="tiny dim">{{ w.objective|truncate(70) }}</div>{% endif %}
+              </td>
+              <td><span class="badge">{{ types.get(w.type, w.type) }}</span></td>
+              <td class="right mono">{{ w.exercise_count }}</td>
+              <td class="muted small nowrap">
+                {% if w.start_date or w.end_date %}
+                  {{ w.start_date|date_br }} - {{ w.end_date|date_br if w.end_date else 'sem fim' }}
+                {% else %}<span class="dim">-</span>{% endif %}
+              </td>
+              <td class="right mono">{{ w.done_count }}</td>
+              <td>
+                <span class="badge {{ 'good' if w.status == 'ativo' }}">{{ statuses.get(w.status, w.status) }}</span>
+              </td>
+              <td class="actions nowrap">
+                <a class="btn sm ghost" href="{{ url_for('workouts.detail', workout_id=w.id) }}">Abrir</a>
+                {% if w.exercise_count and not open_session %}
+                  <form method="post" action="{{ url_for('workouts.start', workout_id=w.id) }}" class="inline-form">
+                    <button class="btn sm primary" type="submit">Iniciar</button>
+                  </form>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="empty">Nenhum treino cadastrado. Crie o primeiro abaixo.</div>
+  {% endif %}
+</section>
+
+<section class="card">
+  <div class="card-head">
+    <div class="card-title">Novo treino</div>
+    <div class="spacer"></div>
+    <span class="tiny dim">So os dados gerais - os exercicios vem depois</span>
+  </div>
+  <form method="post" action="{{ url_for('workouts.save') }}">
+    <div class="form-grid">
+      <div class="field span-2">
+        <label for="name">Nome do treino</label>
+        <input type="text" id="name" name="name" required placeholder="Treino de Forca A">
+      </div>
+      <div class="field">
+        <label for="type">Tipo</label>
+        <select id="type" name="type">
+          {% for key, label in types.items() %}
+            <option value="{{ key }}" {% if key == 'forca' %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="field">
+        <label for="duration_minutes">Duracao prevista (min)</label>
+        <input type="text" id="duration_minutes" name="duration_minutes" placeholder="30">
+      </div>
+      <div class="field span-full">
+        <label for="objective">Objetivo</label>
+        <input type="text" id="objective" name="objective"
+               placeholder="Desenvolver forca de membros superiores para o TAF">
+      </div>
+      <div class="field">
+        <label for="start_date">Vigencia - inicio</label>
+        <input type="date" id="start_date" name="start_date" value="{{ today }}">
+      </div>
+      <div class="field">
+        <label for="end_date">Vigencia - fim</label>
+        <input type="date" id="end_date" name="end_date">
+      </div>
+      <div class="field span-2">
+        <label for="notes">Observacoes gerais</label>
+        <input type="text" id="notes" name="notes" placeholder="Priorizar execucao correta.">
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="btn primary" type="submit">Criar e cadastrar exercicios</button>
+    </div>
+  </form>
+</section>
+
+{% if recent %}
+  <section class="card">
+    <div class="card-head">
+      <div class="card-title">Ultimas execucoes</div>
+      <div class="spacer"></div>
+      <a class="btn sm ghost" href="{{ url_for('workouts.history') }}">Ver historico</a>
+    </div>
+    <div class="list">
+      {% for s in recent %}
+        <div class="list-item">
+          <span class="dot good"></span>
+          <div class="grow">
+            <div class="name">{{ s.workout_name }}</div>
+            <div class="sub">{{ s.date|date_br }} &middot; {{ s.duration_minutes }} min
+              &middot; {{ s.done_exercises }}/{{ s.total_exercises }} exercicios</div>
+          </div>
+          <a class="btn sm ghost" href="{{ url_for('workouts.session_detail', session_id=s.id) }}">Resumo</a>
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+{% endif %}
+{% endblock %}

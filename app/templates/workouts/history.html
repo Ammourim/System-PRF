@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% from "partials/_macros.html" import demo_tag %}
+
+{% block title %}Historico de treinos - Sistema PRF{% endblock %}
+{% block heading %}Historico de treinos{% endblock %}
+{% block subtitle %}<div class="subtitle">Cada execucao registrada, com o que foi feito de verdade.</div>{% endblock %}
+{% block topbar_actions %}<a class="btn ghost" href="{{ url_for('workouts.index') }}">Treinos</a>{% endblock %}
+
+{% block content %}
+<section class="card">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Data</th><th>Treino</th><th class="right">Duracao</th>
+          <th class="right">Exercicios</th><th>Status</th><th class="right">Acoes</th></tr>
+      </thead>
+      <tbody>
+        {% for s in sessions %}
+          <tr>
+            <td class="nowrap muted">{{ s.date|date_br }}</td>
+            <td class="strong">{{ s.workout_name }} {{ demo_tag(s) }}</td>
+            <td class="right mono">{{ s.duration_minutes }} min</td>
+            <td class="right mono">{{ s.done_exercises }}/{{ s.total_exercises }}</td>
+            <td>
+              <span class="badge {{ 'good' if s.status == 'concluida' else ('accent' if s.status == 'em_andamento' else 'warn') }}">
+                {{ statuses.get(s.status, s.status) }}</span>
+            </td>
+            <td class="actions nowrap">
+              {% if s.status == 'em_andamento' %}
+                <a class="btn sm primary" href="{{ url_for('workouts.run', session_id=s.id) }}">Retomar</a>
+              {% else %}
+                <a class="btn sm ghost" href="{{ url_for('workouts.session_detail', session_id=s.id) }}">Resumo</a>
+              {% endif %}
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="6" class="dim center">Nenhuma execucao registrada ainda.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

@@ -150,8 +150,65 @@ Cadastre os testes (corrida, barra, flexao, abdominal ou o que o edital trouxer)
 unidade e meta, marcando se **maior e melhor** (repeticoes) ou menor (tempo). Registre
 marcas ao longo do tempo e acompanhe a evolucao percentual.
 
-No planejamento de treinos, um treino perdido vira **pendente** e espera voce remarcar -
-o sistema nunca empilha uma sequencia impossivel de recuperar.
+### Treinos: cadastro em duas etapas
+
+O treino agora e uma estrutura, nao um registro unico:
+
+```text
+TREINO (plano)
+  └── Exercicio 1, 2, 3...   (prescricao)
+```
+
+1. **Cadastre o treino** em TAF -> Treinos, com apenas os dados gerais: nome, objetivo,
+   tipo, duracao prevista, vigencia e observacoes. Ao salvar, o sistema abre a pagina do
+   treino.
+2. **Adicione os exercicios** um a um. Cada um tem os seus proprios campos, e
+   **nenhum e obrigatorio** - preencha so o que faz sentido:
+
+| Exercicio | O que preencher |
+| --- | --- |
+| Barra fixa | Series 4 &middot; Repeticoes 6 &middot; Descanso 90s &middot; Meta "24 repeticoes" |
+| Corrida | Series 1 &middot; Distancia 5 km &middot; Tempo total 30 min |
+| Prancha | Series 4 &middot; Tempo por serie 45s &middot; Descanso 30s |
+
+Na pagina do treino da para **reordenar** (setas), **duplicar** e **excluir** exercicios.
+Campos de tempo aceitam `45` (segundos) ou `1:30` (= 90 segundos).
+
+### Executar o treino
+
+Na pagina do treino, **Iniciar treino**. A tela de execucao mostra um exercicio e uma
+serie por vez, com botoes grandes para usar no celular durante o treino:
+
+```text
+Exercicio 1 de 4
+BARRA FIXA
+Serie 1 de 4
+Meta da serie: 6 repeticoes
+0 / 24 rep
+[ Repeticoes ] [ Observacao ]
+[   Concluir serie 1   ]
+```
+
+Ao completar as series previstas, o exercicio fecha e o proximo aparece sozinho. Da para
+**pular exercicio** ou ir para o **proximo** a qualquer momento, e corrigir uma serie ja
+registrada. So existe **um treino em andamento por vez** - se voce sair no meio, ele
+aparece no painel como pendencia para retomar.
+
+### Prescricao x realizado
+
+Ao encerrar, o resumo mostra lado a lado o que estava previsto e o que voce fez:
+
+```text
+Barra fixa
+Prescrito: 4 series x 6 rep - meta: 24 repeticoes
+21/24 rep        Serie 1: 6 - Serie 2: 6 - Serie 3: 5 - Serie 4: 4
+```
+
+Cada execucao fica no **historico** (TAF -> Treinos -> Historico), o que permite acompanhar
+a evolucao ao longo do tempo.
+
+Excluir um exercicio ou um treino **nao apaga o historico**: as execucoes guardam uma copia
+do que foi prescrito no dia.
 
 O modulo organiza e acompanha treino. Nao e prescricao de treino nem orientacao medica.
 

@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+
+{% block title %}{{ 'Editar exercicio' if exercise else 'Novo exercicio' }} - Sistema PRF{% endblock %}
+{% block heading %}{{ 'Editar exercicio' if exercise else 'Novo exercicio' }}{% endblock %}
+{% block subtitle %}<div class="subtitle">{{ workout.name }} &middot; posicao {{ position }}</div>{% endblock %}
+{% block topbar_actions %}
+  <a class="btn ghost" href="{{ url_for('workouts.detail', workout_id=workout.id) }}">Voltar ao treino</a>
+{% endblock %}
+
+{% block content %}
+<form method="post" action="{{ url_for('workouts.save_exercise', workout_id=workout.id) }}">
+  {% if exercise %}<input type="hidden" name="id" value="{{ exercise.id }}">{% endif %}
+
+  <section class="card">
+    <div class="card-head"><div class="card-title">Informacoes basicas</div></div>
+    <div class="form-grid">
+      <div class="field span-2">
+        <label for="name">Nome do exercicio</label>
+        <input type="text" id="name" name="name" required autofocus
+               value="{{ exercise.name if exercise else '' }}"
+               placeholder="Barra fixa, Corrida, Prancha...">
+      </div>
+      <div class="field span-2">
+        <label for="category">Categoria</label>
+        <select id="category" name="category">
+          {% for key, label in categories.items() %}
+            <option value="{{ key }}"
+              {% if exercise and exercise.category == key %}selected{% elif not exercise and key == 'forca' %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-head">
+      <div class="card-title">Prescricao</div>
+      <div class="spacer"></div>
+      <span class="tiny dim">Preencha so o que faz sentido para este exercicio</span>
+    </div>
+
+    <div class="form-grid">
+      <div class="field">
+        <label for="sets">Series</label>
+        <input type="number" id="sets" name="sets" min="1"
+               value="{{ exercise.sets if exercise and exercise.sets else '' }}" placeholder="4">
+      </div>
+      <div class="field">
+        <label for="reps">Repeticoes por serie</label>
+        <input type="number" id="reps" name="reps" min="1"
+               value="{{ exercise.reps if exercise and exercise.reps else '' }}" placeholder="6">
+      </div>
+      <div class="field">
+        <label for="seconds_per_set">Tempo por serie (s)</label>
+        <input type="text" id="seconds_per_set" name="seconds_per_set"
+               value="{{ exercise.seconds_per_set if exercise and exercise.seconds_per_set else '' }}"
+               placeholder="45">
+      </div>
+      <div class="field">
+        <label for="rest_seconds">Descanso entre series (s)</label>
+        <input type="text" id="rest_seconds" name="rest_seconds"
+               value="{{ exercise.rest_seconds if exercise and exercise.rest_seconds else '' }}"
+               placeholder="90">
+      </div>
+      <div class="field">
+        <label for="distance_km">Distancia (km)</label>
+        <input type="text" id="distance_km" name="distance_km"
+               value="{{ exercise.distance_km|num if exercise and exercise.distance_km else '' }}"
+               placeholder="5">
+      </div>
+      <div class="field">
+        <label for="total_minutes">Tempo total (min)</label>
+        <input type="text" id="total_minutes" name="total_minutes"
+               value="{{ (exercise.total_seconds // 60) if exercise and exercise.total_seconds else '' }}"
+               placeholder="30">
+      </div>
+      <div class="field span-2">
+        <label for="goal">Meta</label>
+        <input type="text" id="goal" name="goal"
+               value="{{ exercise.goal if exercise else '' }}"
+               placeholder="24 repeticoes / 5 km em ate 30 minutos">
+      </div>
+      <div class="field span-full">
+        <label for="notes">Observacoes</label>
+        <input type="text" id="notes" name="notes"
+               value="{{ exercise.notes if exercise else '' }}"
+               placeholder="Pegada pronada, descer ate esticar o braco">
+      </div>
+    </div>
+
+    <details class="box mt">
+      <summary>Exemplos de preenchimento</summary>
+      <div class="grid cols-3">
+        <div>
+          <div class="strong">Barra fixa</div>
+          <div class="tiny muted">Series 4 &middot; Repeticoes 6 &middot; Descanso 90s<br>Meta: 24 repeticoes</div>
+        </div>
+        <div>
+          <div class="strong">Corrida</div>
+          <div class="tiny muted">Series 1 &middot; Distancia 5 km &middot; Tempo total 30 min<br>Meta: 5 km em ate 30 min</div>
+        </div>
+        <div>
+          <div class="strong">Prancha</div>
+          <div class="tiny muted">Series 4 &middot; Tempo por serie 45s &middot; Descanso 30s</div>
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <section class="card">
+    <div class="form-actions">
+      <button class="btn primary" type="submit">Salvar exercicio</button>
+      {% if not exercise %}
+        <button class="btn" type="submit" name="add_another" value="1">Salvar e adicionar outro</button>
+      {% endif %}
+      <a class="btn ghost" href="{{ url_for('workouts.detail', workout_id=workout.id) }}">Cancelar</a>
+    </div>
+  </section>
+</form>
+{% endblock %}

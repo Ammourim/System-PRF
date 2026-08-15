@@ -9,7 +9,7 @@ def test_todas_as_paginas_abrem(client):
     for url in ["/", "/ciclo/", "/ciclo/montar", "/sessoes/", "/sessoes/nova", "/questoes/",
                 "/revisoes/", "/erros/", "/simulados/", "/simulados/cronometro",
                 "/desempenho/", "/desempenho/ajustes", "/disciplinas/", "/taf/",
-                "/taf/treinos", "/faculdade/", "/configuracoes/", "/dados/"]:
+                "/taf/treinos/", "/faculdade/", "/configuracoes/", "/dados/"]:
         response = client.get(url)
         assert response.status_code == 200, f"{url} retornou {response.status_code}"
 
@@ -38,6 +38,9 @@ def test_nenhum_get_altera_estado(client, app):
                 "targets": scalar("SELECT SUM(target_minutes) FROM disciplines", (), 0),
                 "review_dates": scalar("SELECT group_concat(next_date) FROM reviews", (), ""),
                 "workouts": scalar("SELECT COUNT(*) FROM taf_workouts", (), 0),
+                "workout_sessions": scalar(
+                    "SELECT COUNT(*) FROM taf_workout_sessions", (), 0),
+                "workout_sets": scalar("SELECT COUNT(*) FROM taf_session_sets", (), 0),
             }
 
     before = snapshot()
@@ -46,7 +49,7 @@ def test_nenhum_get_altera_estado(client, app):
     for url in ["/", "/ciclo/", "/ciclo/montar", f"/ciclo/{cycle_id}/relatorio", "/sessoes/",
                 "/sessoes/nova", "/questoes/", "/revisoes/", "/erros/", "/simulados/",
                 "/simulados/cronometro", "/desempenho/", "/desempenho/ajustes",
-                "/disciplinas/", "/taf/", "/taf/treinos", "/faculdade/", "/configuracoes/",
+                "/disciplinas/", "/taf/", "/taf/treinos/", "/faculdade/", "/configuracoes/",
                 "/dados/"]:
         assert client.get(url).status_code == 200, url
     for url in ["/", "/desempenho/ajustes", "/revisoes/"]:  # abrir duas vezes tambem nao muda

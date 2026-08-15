@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+
+{% block title %}Executando: {{ session.workout_name }} - Sistema PRF{% endblock %}
+{% block heading %}{{ session.workout_name }}{% endblock %}
+{% block subtitle %}
+  <div class="subtitle">
+    {% if current %}Exercicio {{ position }}/{{ summary.total_exercises }}{% else %}Todos os exercicios tratados{% endif %}
+    &middot; {{ summary.sets_done }}/{{ summary.sets_planned or '?' }} series
+  </div>
+{% endblock %}
+
+{% block content %}
+<div class="run-progress">
+  {% for item in summary.exercises %}
+    <i class="{{ 'done' if item.exercise.status == 'concluido' else ('skipped' if item.exercise.status == 'pulado' else ('current' if current and item.exercise.id == current.id else '')) }}"
+       title="{{ item.exercise.position }}. {{ item.exercise.name }}"></i>
+  {% endfor %}
+</div>
+
+{% if current %}
+  {% set p = progress %}
+  <section class="run-card">
+    <div class="run-eyebrow">Exercicio {{ position }} de {{ summary.total_exercises }}</div>
+    <h2 class="run-title">{{ current.name }}</h2>
+
+    <div class="run-set">
+      Serie {{ p.next_set }}{% if p.sets_planned %} de {{ p.sets_planned }}{% endif %}
+    </div>
+
+    <div class="run-target">
+      {% if current.planned_reps %}Meta da serie: <strong>{{ current.planned_reps }} repeticoes</strong>
+      {% elif current.planned_seconds %}Meta da serie: <strong>{{ current.planned_seconds }} segundos</strong>
+      {% elif current.planned_distance_km %}Meta da serie: <strong>{{ current.planned_distance_km|num }} km</strong>
+      {% else %}<span class="dim">Sem meta definida para a serie</span>{% endif %}
+      {% if current.rest_seconds %}<div class="tiny dim">Descanso previsto: {{ current.rest_seconds }}s</div>{% endif %}
+      {% if current.goal %}<div class="tiny dim">Meta do exercicio: {{ current.goal }}</div>{% endif %}
+    </div>
+
+    {% if p.target %}
+      <div class="run-tally">
+        <span class="run-tally-value">{{ p.achieved }}</span>
+        <span class="run-tally-sep">/</span>
+        <span class="run-tally-goal">{{ p.target }}</span>
+        <span class="run-tally-unit">{{ p.unit }}</span>
+      </div>
+      <div class="bar {{ 'good' if p.pct and p.pct >= 100 }}">
+        <span style="width: {{ [p.pct or 0, 100]|min }}%"></span>
+      </div>
+    {% endif %}
+
+    <form method="post" action="{{ url_for('workouts.log_set', session_id=session.id) }}" class="run-form">
+      <input type="hidden" name="session_exercise_id" value="{{ current.id }}">
+      <input type="hidden" name="set_number" value="{{ p.next_set }}">
+      <div class="run-inputs">
+        {% if current.planned_reps or not (current.planned_seconds or current.planned_distance_km) %}
+          <div class="field">
+            <label for="reps">Repeticoes</label>
+            <input type="number" id="reps" name="reps" min="0" inputmode="numeric"
+                   placeholder="{{ current.planned_reps or '' }}" autofocus>
+          </div>
+        {% endif %}
+        {% if current.planned_seconds or not current.planned_reps %}
+          <div class="field">
+            <label for="seconds">Tempo (s)</label>
+            <input type="text" id="seconds" name="seconds" inputmode="numeric"
+                   placeholder="{{ current.planned_seconds or '' }}">
+          </div>
+        {% endif %}
+        {% if current.planned_distance_km %}
+          <div class="field">
+            <label for="distance_km">Distancia (km)</label>
+            <input type="text" id="distance_km" name="distance_km" inputmode="decimal"
+                   placeholder="{{ current.planned_distance_km|num }}">
+          </div>
+        {% endif %}
+        <div class="field grow-field">
+          <label for="notes">Observacao</label>
+          <input type="text" id="notes" name="notes" placeholder="opcional">
+        </div>
+      </div>
+      <button class="btn primary run-action" type="submit">Concluir serie {{ p.next_set }}</button>
+    </form>
+
+    {% if p.sets %}
+      <div class="run-sets">
+        {% for s in p.sets %}
+          <div class="run-set-row">
+            <span class="badge">{{ s.set_number }}</span>
+            <span class="grow">
+              {% if s.reps %}{{ s.reps }} rep{% endif %}
+              {%- if s.seconds %} {{ s.seconds }}s{% endif %}
+              {%- if s.distance_km %} {{ s.distance_km|num }} km{% endif %}
+              {%- if s.notes %} <span class="dim">- {{ s.notes }}</span>{% endif %}
+            </span>
+            <form method="post" class="inline-form"
+                  action="{{ url_for('workouts.delete_set', session_id=session.id, set_id=s.id) }}">
+              <button class="btn sm ghost" type="submit" title="Remover serie">x</button>
+            </form>
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    <div class="run-secondary">
+      <form method="post" action="{{ url_for('workouts.exercise_status', session_id=session.id) }}" class="inline-form">
+        <input type="hidden" name="session_exercise_id" value="{{ current.id }}">
+        <input type="hidden" name="status" value="concluido">
+        <button class="btn" type="submit">Proximo exercicio</button>
+      </form>
+      <form method="post" action="{{ url_for('workouts.exercise_status', session_id=session.id) }}" class="inline-form">
+        <input type="hidden" name="session_exercise_id" value="{{ current.id }}">
+        <input type="hidden" name="status" value="pulado">
+        <button class="btn ghost" type="submit">Pular exercicio</button>
+      </form>
+    </div>
+  </section>
+{% else %}
+  <section class="run-card">
+    <div class="run-eyebrow">Treino percorrido</div>
+    <h2 class="run-title">Todos os exercicios foram tratados</h2>
+    <p class="muted">Encerre para gravar o resultado no historico.</p>
+  </section>
+{% endif %}
+
+<section class="card">
+  <div class="card-head"><div class="card-title">Encerrar treino</div></div>
+  <form method="post" action="{{ url_for('workouts.finish', session_id=session.id) }}">
+    <div class="form-grid cols-2">
+      <div class="field">
+        <label for="duration_minutes">Duracao (min)</label>
+        <input type="text" id="duration_minutes" name="duration_minutes"
+               placeholder="deixe vazio para calcular pelo relogio">
+      </div>
+      <div class="field">
+        <label for="finish_notes">Como foi</label>
+        <input type="text" id="finish_notes" name="notes" placeholder="opcional">
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="btn primary" type="submit" name="status" value="concluida">Concluir treino</button>
+      <button class="btn danger" type="submit" name="status" value="abandonada"
+              formnovalidate>Abandonar</button>
+      <span class="tiny dim">O que ja foi registrado permanece no historico nos dois casos.</span>
+    </div>
+  </form>
+</section>
+
+<section class="card">
+  <details class="box" style="margin:0">
+    <summary>Ver todos os exercicios deste treino</summary>
+    <div class="list">
+      {% for item in summary.exercises %}
+        <div class="list-item">
+          <span class="badge {{ 'good' if item.exercise.status == 'concluido' else ('warn' if item.exercise.status == 'pulado' else '') }}">{{ item.exercise.position }}</span>
+          <div class="grow">
+            <div class="name">{{ item.exercise.name }}</div>
+            <div class="sub">{{ item.progress.sets_done }}/{{ item.progress.sets_planned or '?' }} series
+              &middot; {{ item.exercise.status|replace('_', ' ') }}</div>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  </details>
+</section>
+{% endblock %}

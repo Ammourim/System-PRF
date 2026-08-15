@@ -42,6 +42,15 @@
 - [x] Bloqueio por tentativas, cookie endurecido e verificacao de origem (CSRF)
 - [x] Guia de publicacao gratuita no PythonAnywhere ([DEPLOY.md](DEPLOY.md))
 
+### Fase 6 - Treinos estruturados
+- [x] Treino como plano reutilizavel com objetivo e vigencia
+- [x] Exercicios individuais com prescricao flexivel por tipo
+- [x] Reordenar, duplicar e excluir exercicios
+- [x] Modo de execucao guiado, exercicio a exercicio e serie a serie
+- [x] Registro de resultado por serie, separado da prescricao
+- [x] Historico de execucoes com prescrito x realizado
+- [x] Migration convertendo os treinos do formato antigo sem perda de dados
+
 ## Adiado com motivo
 
 ### Google Calendar

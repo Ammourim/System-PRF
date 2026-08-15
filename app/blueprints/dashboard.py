@@ -10,6 +10,7 @@ from ..services import mocks as mocks_service
 from ..services import reviews as reviews_service
 from ..services import settings as settings_service
 from ..services import stats
+from ..services import workouts as workouts_service
 from ..utils import add_days, today_iso
 from .common import SESSION_TYPES, disciplines
 
@@ -23,11 +24,9 @@ def index():
     block = cycle_service.next_block(cycle)
     today = today_iso()
 
-    pending_workouts = query_all(
-        "SELECT * FROM taf_workouts WHERE status = 'pendente' ORDER BY date DESC LIMIT 3")
-    next_workout = query_all(
-        "SELECT * FROM taf_workouts WHERE status = 'planejado' AND date >= ?"
-        " ORDER BY date LIMIT 1", (today,))
+    # "Pendencia" agora e um treino iniciado e nao encerrado - nao um dia perdido.
+    open_session = workouts_service.open_session()
+    active_workouts = workouts_service.active_today(today)
     college_due = query_all(
         "SELECT t.*, c.name AS subject_name FROM college_tasks t"
         " LEFT JOIN college_subjects c ON c.id = t.college_subject_id"
@@ -51,8 +50,8 @@ def index():
         session_types=SESSION_TYPES,
         capacity=cycle_service.estimated_capacity(),
         mock_status=mocks_service.status(),
-        pending_workouts=pending_workouts,
-        next_workout=next_workout[0] if next_workout else None,
+        open_session=open_session,
+        active_workouts=active_workouts,
         college_due=college_due,
         college_goal_minutes=int(settings_service.get_float("college_hours_per_week", 4) * 60),
     )

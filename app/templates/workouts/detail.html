@@ -1,0 +1,182 @@
+{% extends "base.html" %}
+
+{% block title %}{{ workout.name }} - Sistema PRF{% endblock %}
+{% block heading %}{{ workout.name }}{% endblock %}
+{% block subtitle %}
+  <div class="subtitle">
+    {{ types.get(workout.type, workout.type) }}
+    {%- if workout.duration_minutes %} &middot; {{ workout.duration_minutes }} min previstos{% endif %}
+    {%- if workout.start_date or workout.end_date %} &middot; vigencia {{ workout.start_date|date_br }} a {{ workout.end_date|date_br if workout.end_date else 'sem fim' }}{% endif %}
+  </div>
+{% endblock %}
+{% block topbar_actions %}<a class="btn ghost" href="{{ url_for('workouts.index') }}">Todos os treinos</a>{% endblock %}
+
+{% block content %}
+<section class="card {{ 'accent' if exercises }}">
+  <div class="row">
+    <div class="grow">
+      {% if workout.objective %}
+        <div class="card-title">Objetivo</div>
+        <p class="strong" style="margin-bottom:8px">{{ workout.objective }}</p>
+      {% endif %}
+      <div class="row tight">
+        <span class="badge {{ 'good' if workout.status == 'ativo' }}">{{ statuses.get(workout.status, workout.status) }}</span>
+        <span class="badge">{{ exercises|length }} exercicio(s)</span>
+        {% if workout.duration_minutes %}<span class="badge">{{ workout.duration_minutes }} min</span>{% endif %}
+      </div>
+      {% if workout.notes %}<p class="muted small mt">{{ workout.notes }}</p>{% endif %}
+    </div>
+    <div class="stack">
+      {% if open_session and open_session.workout_id == workout.id %}
+        <a class="btn primary big" href="{{ url_for('workouts.run', session_id=open_session.id) }}">Retomar treino</a>
+      {% elif open_session %}
+        <span class="tiny dim">Ha outro treino em andamento</span>
+        <a class="btn" href="{{ url_for('workouts.run', session_id=open_session.id) }}">Ir para ele</a>
+      {% elif exercises %}
+        <form method="post" action="{{ url_for('workouts.start', workout_id=workout.id) }}">
+          <button class="btn primary big" type="submit">Iniciar treino</button>
+        </form>
+      {% else %}
+        <span class="tiny dim">Cadastre um exercicio para poder iniciar</span>
+      {% endif %}
+    </div>
+  </div>
+</section>
+
+<section class="card">
+  <div class="card-head">
+    <div class="card-title">Exercicios do treino</div>
+    <div class="spacer"></div>
+    <a class="btn primary" href="{{ url_for('workouts.new_exercise', workout_id=workout.id) }}">+ Adicionar exercicio</a>
+  </div>
+
+  {% if exercises %}
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th style="width:44px">#</th><th>Exercicio</th><th>Prescricao</th>
+            <th>Meta</th><th class="right">Ordem</th><th class="right">Acoes</th></tr>
+        </thead>
+        <tbody>
+          {% for item in exercises %}
+            {% set e = item.row %}
+            <tr>
+              <td class="mono">{{ e.position }}</td>
+              <td>
+                <div class="strong">{{ e.name }}</div>
+                <div class="tiny dim">{{ categories.get(e.category, e.category) }}
+                  {%- if e.notes %} &middot; {{ e.notes|truncate(40) }}{% endif %}</div>
+              </td>
+              <td class="muted small">{{ item.summary }}</td>
+              <td class="muted small">{{ e.goal or '-' }}</td>
+              <td class="right nowrap">
+                <form method="post" action="{{ url_for('workouts.exercise_action', exercise_id=e.id) }}" class="inline-form">
+                  <input type="hidden" name="action" value="subir">
+                  <button class="btn sm ghost" type="submit" title="Subir"
+                          {% if loop.first %}disabled{% endif %}>&uarr;</button>
+                </form>
+                <form method="post" action="{{ url_for('workouts.exercise_action', exercise_id=e.id) }}" class="inline-form">
+                  <input type="hidden" name="action" value="descer">
+                  <button class="btn sm ghost" type="submit" title="Descer"
+                          {% if loop.last %}disabled{% endif %}>&darr;</button>
+                </form>
+              </td>
+              <td class="actions nowrap">
+                <a class="btn sm ghost" href="{{ url_for('workouts.edit_exercise', exercise_id=e.id) }}">Editar</a>
+                <form method="post" action="{{ url_for('workouts.exercise_action', exercise_id=e.id) }}" class="inline-form">
+                  <input type="hidden" name="action" value="duplicar">
+                  <button class="btn sm ghost" type="submit">Duplicar</button>
+                </form>
+                <form method="post" action="{{ url_for('workouts.exercise_action', exercise_id=e.id) }}"
+                      class="inline-form" data-confirm="Remover este exercicio do treino? As execucoes ja feitas sao mantidas.">
+                  <input type="hidden" name="action" value="excluir">
+                  <button class="btn sm danger" type="submit">Excluir</button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="empty">
+      Nenhum exercicio ainda.
+      <a href="{{ url_for('workouts.new_exercise', workout_id=workout.id) }}">Adicione o primeiro</a>.
+    </div>
+  {% endif %}
+</section>
+
+<section class="card">
+  <div class="card-head"><div class="card-title">Historico deste treino</div></div>
+  {% if history %}
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Data</th><th class="right">Duracao</th><th class="right">Exercicios</th>
+          <th>Status</th><th class="right">Acoes</th></tr></thead>
+        <tbody>
+          {% for s in history %}
+            <tr>
+              <td class="nowrap muted">{{ s.date|date_br }}</td>
+              <td class="right mono">{{ s.duration_minutes }} min</td>
+              <td class="right mono">{{ s.done_exercises }}/{{ s.total_exercises }}</td>
+              <td>
+                <span class="badge {{ 'good' if s.status == 'concluida' else ('accent' if s.status == 'em_andamento' else '') }}">{{ s.status|replace('_', ' ') }}</span>
+              </td>
+              <td class="actions">
+                <a class="btn sm ghost" href="{{ url_for('workouts.session_detail', session_id=s.id) }}">Resumo</a>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <div class="empty">Este treino ainda nao foi executado.</div>
+  {% endif %}
+</section>
+
+<section class="card">
+  <details class="box" style="margin:0">
+    <summary>Editar dados gerais do treino</summary>
+    <form method="post" action="{{ url_for('workouts.save') }}">
+      <input type="hidden" name="id" value="{{ workout.id }}">
+      <div class="form-grid">
+        <div class="field span-2"><label>Nome</label>
+          <input type="text" name="name" value="{{ workout.name }}" required></div>
+        <div class="field">
+          <label>Tipo</label>
+          <select name="type">
+            {% for key, label in types.items() %}
+              <option value="{{ key }}" {% if workout.type == key %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field"><label>Duracao prevista (min)</label>
+          <input type="text" name="duration_minutes" value="{{ workout.duration_minutes }}"></div>
+        <div class="field span-full"><label>Objetivo</label>
+          <input type="text" name="objective" value="{{ workout.objective }}"></div>
+        <div class="field"><label>Vigencia - inicio</label>
+          <input type="date" name="start_date" value="{{ workout.start_date or '' }}"></div>
+        <div class="field"><label>Vigencia - fim</label>
+          <input type="date" name="end_date" value="{{ workout.end_date or '' }}"></div>
+        <div class="field">
+          <label>Status</label>
+          <select name="status">
+            {% for key, label in statuses.items() %}
+              <option value="{{ key }}" {% if workout.status == key %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field span-full"><label>Observacoes</label>
+          <textarea name="notes">{{ workout.notes }}</textarea></div>
+      </div>
+      <div class="form-actions"><button class="btn primary" type="submit">Salvar</button></div>
+    </form>
+    <form method="post" action="{{ url_for('workouts.delete', workout_id=workout.id) }}" class="mt"
+          data-confirm="Excluir este treino e seus exercicios? O historico de execucoes e mantido.">
+      <button class="btn danger" type="submit">Excluir treino</button>
+      <span class="tiny dim">As execucoes ja registradas continuam no historico.</span>
+    </form>
+  </details>
+</section>
+{% endblock %}

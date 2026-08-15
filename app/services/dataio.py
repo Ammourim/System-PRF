@@ -17,14 +17,15 @@ from ..db import get_db
 EXPORTABLE = [
     "disciplines", "subjects", "study_cycles", "cycle_blocks", "study_sessions",
     "questions", "mistakes", "reviews", "mock_exams", "mock_exam_results",
-    "taf_tests", "taf_measurements", "taf_workouts", "college_subjects",
-    "college_tasks", "college_sessions", "settings",
+    "taf_tests", "taf_measurements", "taf_workouts", "taf_workout_exercises",
+    "taf_workout_sessions", "taf_session_exercises", "taf_session_sets",
+    "college_subjects", "college_tasks", "college_sessions", "settings",
 ]
 
 IMPORTABLE = [
     "disciplines", "subjects", "study_sessions", "questions", "mistakes", "reviews",
     "mock_exams", "taf_tests", "taf_measurements", "taf_workouts",
-    "college_subjects", "college_tasks", "college_sessions",
+    "taf_workout_exercises", "college_subjects", "college_tasks", "college_sessions",
 ]
 
 

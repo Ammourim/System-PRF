@@ -62,10 +62,11 @@ def register_blueprints(app: Flask) -> None:
         sessions,
         settings,
         taf,
+        workouts,
     )
 
     for module in (dashboard, cycles, disciplines, sessions, questions, mistakes,
-                   reviews, mocks, performance, taf, college, settings, data):
+                   reviews, mocks, performance, taf, workouts, college, settings, data):
         app.register_blueprint(module.bp)
 
 

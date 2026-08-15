@@ -186,9 +186,9 @@ def cycle_report(cycle) -> dict:
         "SELECT COUNT(*) FROM reviews WHERE last_done_at BETWEEN ? AND ?", (start, end), 0))
     reviews_pending = int(scalar(
         "SELECT COUNT(*) FROM reviews WHERE status = 'pendente' AND next_date <= ?", (end,), 0))
-    workouts = int(scalar(
-        "SELECT COUNT(*) FROM taf_workouts WHERE date BETWEEN ? AND ? AND status = 'concluido'",
-        (start, end), 0))
+    from . import workouts as workouts_service
+
+    workouts = workouts_service.count_in_period(start, end)
     college_minutes = int(scalar(
         "SELECT COALESCE(SUM(minutes), 0) FROM college_sessions WHERE date BETWEEN ? AND ?",
         (start, end), 0))

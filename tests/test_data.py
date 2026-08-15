@@ -15,7 +15,9 @@ def test_migrations_criam_todas_as_tabelas(ctx):
         "SELECT name FROM sqlite_master WHERE type = 'table'")}
     esperadas = {"disciplines", "subjects", "study_cycles", "cycle_blocks", "study_sessions",
                  "questions", "mistakes", "reviews", "mock_exams", "mock_exam_results",
-                 "taf_tests", "taf_workouts", "college_subjects", "college_tasks", "settings"}
+                 "taf_tests", "taf_workouts", "taf_workout_exercises", "taf_workout_sessions",
+                 "taf_session_exercises", "taf_session_sets",
+                 "college_subjects", "college_tasks", "settings"}
     assert esperadas.issubset(tables)
 
 
