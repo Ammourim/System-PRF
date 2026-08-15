@@ -1,15 +1,17 @@
 """Modelo do arquivo WSGI do PythonAnywhere.
 
-NAO e usado localmente. Copie o conteudo abaixo para o arquivo WSGI que o
-PythonAnywhere cria em /var/www/SEUUSUARIO_pythonanywhere_com_wsgi.py,
-trocando SEUUSUARIO pelo seu nome de usuario. Veja DEPLOY.md.
+NAO e usado localmente. Copie TODO o conteudo abaixo para o arquivo WSGI que o
+PythonAnywhere cria em /var/www/SEUUSUARIO_pythonanywhere_com_wsgi.py
+(apagando o que estiver la). Veja DEPLOY.md.
+
+Nao ha nada para editar: o caminho da pasta pessoal e descoberto sozinho.
 """
 
 import os
 import sys
 
-# 1. Caminho do projeto (trocar SEUUSUARIO).
-PROJETO = "/home/SEUUSUARIO/System-PRF"
+# 1. Caminho do projeto, descoberto a partir da pasta pessoal do usuario.
+PROJETO = os.path.join(os.path.expanduser("~"), "System-PRF")
 if PROJETO not in sys.path:
     sys.path.insert(0, PROJETO)
 
@@ -22,7 +24,5 @@ os.environ.setdefault("PRF_HTTPS", "1")
 os.environ.setdefault("PRF_DEBUG", "0")
 
 # 4. PRF_SECRET_KEY e PRF_PASSWORD_HASH vem do arquivo .env dentro do projeto.
-#    Se preferir, defina-os aqui com os.environ.setdefault - mas o .env e mais
-#    simples de atualizar e ja esta no .gitignore.
 
 from run import app as application  # noqa: E402
