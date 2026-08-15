@@ -68,7 +68,7 @@ Se nao imprimiu nada, sua senha e seus dados de estudo nao foram para o GitHub.
 2. ☁️ **No PythonAnywhere**, abra **Consoles → Bash** e rode:
 
 ```bash
-git clone https://github.com/ammourim/System-PRF.git ~/System-PRF
+git clone https://github.com/Ammourim/System-PRF.git ~/System-PRF
 ```
 
 Como o repositorio e **publico**, isso funciona sem senha e sem token.
@@ -268,8 +268,78 @@ Depois clique em **Reload** na aba **Web**. Migrations de banco sao aplicadas so
 | Quando | O que fazer |
 | --- | --- |
 | **Todo mes** | Aba **Web** → clicar no botao de renovar o web app. Nada e apagado se atrasar; o site so para de responder ate voce renovar. |
-| **Toda semana** | **Dados e backup → Gerar backup agora** e baixar o arquivo para o PC. O plano gratuito nao tem backup automatico. |
+| **Toda semana** | Rodar o backup automatico (abaixo) ou **Dados e backup → Gerar backup agora**. |
 | **Trocar a senha** | Repetir os passos 5 e 6 e dar **Reload**. |
+
+---
+
+## Backup automatico (recomendado)
+
+O plano gratuito nao faz backup nenhum. O script `scripts/backup_remoto.py` baixa o banco
+do servidor para o seu PC usando a **API oficial** do PythonAnywhere, que autentica por
+**token** - a senha da conta nunca e usada nem guardada.
+
+Ele nao apenas baixa: **verifica o arquivo** com `PRAGMA integrity_check` e so entao o
+considera um backup, porque um backup que nao abre nao e backup. Tambem apaga os mais
+antigos (mantem os 12 ultimos) e avisa quantos dias faltam para o site expirar.
+
+### Configurar uma vez
+
+1. PythonAnywhere → **Account** → aba **API token** → *Create a new API token*. Copie-o.
+
+2. 💻 No seu PC, grave o token em um arquivo (ja esta no `.gitignore`, nao vai para o GitHub):
+
+```bash
+notepad .pa_token
+```
+
+Cole so o token, salve e feche.
+
+3. Teste:
+
+```bash
+.venv\Scripts\python.exe scripts\backup_remoto.py
+```
+
+Deve imprimir algo como
+`OK  prf-remoto-20260815-1400.db  (192 KB) - 14 disciplinas, 37 sessoes, 820 questoes`.
+
+### Agendar no Windows
+
+Abra o **Agendador de Tarefas** → *Criar Tarefa Básica*:
+
+| Campo | Valor |
+| --- | --- |
+| Nome | `Backup Sistema PRF` |
+| Disparador | Diariamente (ou semanalmente) |
+| Ação | Iniciar um programa |
+| Programa | `C:\Users\ALAN\Documents\System-PRF\scripts\backup_remoto.bat` |
+
+Marque **"Executar mesmo que o usuário não esteja conectado"** se quiser que rode com o PC
+ligado sem voce logado. O resultado de cada execucao fica em `backups\backup.log`.
+
+Se o PC estiver desligado na hora marcada, o Windows roda assim que ligar (marque
+*"Executar a tarefa o mais rápido possível após um agendamento perdido"*).
+
+---
+
+## Renovacao mensal: por que NAO automatizo
+
+Verifiquei a API oficial: **nao existe endpoint para renovar a expiracao**. Ha endpoints
+para recarregar, ligar, desligar e ate apagar o web app - renovar, nao.
+
+A unica forma de automatizar seria um robo de navegador (Selenium) clicando no botao. Nao
+recomendo, por tres motivos concretos:
+
+1. exigiria guardar a **senha da sua conta** PythonAnywhere em algum lugar - nao um token
+   revogavel, a senha mesmo;
+2. quebra sempre que a pagina mudar, e voce so descobre quando o site ja caiu;
+3. o prazo existe justamente para o PythonAnywhere recuperar contas gratuitas abandonadas.
+   Automatizar o clique contorna isso e pode custar a conta.
+
+O caminho sensato: **um lembrete recorrente**. Sao 30 segundos por mes. Alem disso, o
+script de backup ja avisa a cada execucao quantos dias faltam, e o PythonAnywhere envia
+e-mail uma semana antes. Sao tres avisos independentes - dificil perder os tres.
 
 ---
 
@@ -281,7 +351,7 @@ Depois clique em **Reload** na aba **Web**. Migrations de banco sao aplicadas so
   exemplo. Corrija (💻 no PC):
 
 ```bash
-git remote set-url origin https://github.com/ammourim/System-PRF.git
+git remote set-url origin https://github.com/Ammourim/System-PRF.git
 ```
 
 * **`error: remote origin already exists`**: o `origin` ja existe. Use o `set-url` acima,

@@ -7,6 +7,7 @@ __pycache__/
 
 # Segredos e configuracao local
 .env
+.pa_token
 *.secret
 credentials.json
 token.json
