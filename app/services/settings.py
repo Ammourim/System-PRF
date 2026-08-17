@@ -28,8 +28,9 @@ DEFAULTS: dict[str, str] = {
     "folga_hours": "6",
     "plantoes_per_cycle": "7",
     "folgas_per_cycle": "7",
-    # Objetivos do dia (o ciclo simplificado)
-    "today_max_disciplines": "5",        # teto de disciplinas por dia (0 = sem teto)
+    # Ciclo sequencial: posicao atual na sequencia (base 0).
+    # So avanca quando um estudo e concluido - nunca por data.
+    "cycle_position": "0",
     # Revisao espacada
     "review_intervals": "1,7,15,30,60",
     # Simulados

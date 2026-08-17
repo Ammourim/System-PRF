@@ -1,252 +1,322 @@
-"""Tela HOJE: objetivos do dia, registro de estudo e conclusao de assunto.
+"""O ciclo sequencial e a aba HOJE.
 
-Estes testes fixam a filosofia do sistema simplificado:
-  * abrir a tela nao cria nada;
-  * registrar estudo NAO conclui o assunto;
-  * concluir o assunto e o que inicia a revisao espacada;
-  * nao estudar hoje nao gera pendencia nenhuma.
+Regras fixadas aqui:
+  * a aba HOJE mostra UMA disciplina - a da vez;
+  * abrir o formulario de estudo NAO avanca o ciclo;
+  * concluir o estudo avanca, e a proxima aparece na hora;
+  * frequencia define quantas vezes a disciplina entra na sequencia;
+  * prioridade define a ordem, nunca a quantidade;
+  * inativa nao entra;
+  * revisao espacada e independente do ciclo;
+  * um dia sem estudar nao mexe na posicao.
 """
 
 from app.db import query_one, scalar
+from app.services import reviews as reviews_service
 from app.services import today as today_service
 from app.utils import add_days, today_iso
 
-
-# --------------------------------------------------------------------------
-# Escolha das disciplinas do dia
-# --------------------------------------------------------------------------
-def test_frequencia_padrao_vem_da_prioridade():
-    assert today_service.default_frequency("maxima") == 5
-    assert today_service.default_frequency("alta") == 3
-    assert today_service.default_frequency("media") == 2
-    assert today_service.default_frequency("baixa") == 1
+# Configuracao pedida: CTB 3x, Portugues 2x, as demais ativas 1x, quatro inativas.
+ATIVAS = ["CTB", "Portugues", "Administrativo", "Constitucional", "Informatica",
+          "RLM", "Leg. Especial", "Etica", "Penal", "Processo Penal"]
+INATIVAS = ["Espanhol", "Dir. Humanos", "Geopolitica", "Fisica"]
 
 
-def test_frequencia_f_aparece_f_dias_em_cada_semana():
-    for frequency in range(1, 8):
-        for offset in range(0, 7):
-            dias = sum(1 for d in range(738000, 738007)
-                       if today_service.lands_on(d, frequency, offset))
-            assert dias == frequency, (frequency, offset)
-
-
-def test_lista_do_dia_e_deterministica(ctx):
-    primeira = [d["id"] for d in today_service.objectives("2026-08-17")]
-    segunda = [d["id"] for d in today_service.objectives("2026-08-17")]
-    assert primeira == segunda
-
-
-def test_prioridade_maxima_aparece_mais_que_baixa(ctx):
+def _sequencia_curta(ctx):
+    """Ciclo minimo e previsivel: CTB (2x) e Portugues (1x), o resto fora."""
     ctx.execute("UPDATE disciplines SET active = 0")
-    ctx.execute("UPDATE disciplines SET active = 1, priority = 'maxima', frequency = 5"
-                " WHERE id = 1")
+    ctx.execute("UPDATE disciplines SET active = 1, priority = 'maxima', frequency = 2"
+                " WHERE short_name = 'CTB'")
+    ctx.execute("UPDATE disciplines SET active = 1, priority = 'alta', frequency = 1"
+                " WHERE short_name = 'Portugues'")
+    ctx.commit()
+
+
+# --------------------------------------------------------------------------
+# Configuracao inicial das disciplinas (migration 005)
+# --------------------------------------------------------------------------
+def test_prioridades_iniciais(ctx):
+    def prioridade(short):
+        return query_one("SELECT priority FROM disciplines WHERE short_name = ?",
+                         (short,))["priority"]
+
+    assert prioridade("CTB") == "maxima"
+    assert prioridade("Portugues") == "maxima"
+    for short in ["Administrativo", "Constitucional", "Informatica", "RLM",
+                  "Leg. Especial", "Etica"]:
+        assert prioridade(short) == "alta", short
+    assert prioridade("Penal") == "media"
+    assert prioridade("Processo Penal") == "media"
+
+
+def test_quatro_disciplinas_ficam_inativas_mas_cadastradas(ctx):
+    for short in INATIVAS:
+        row = query_one("SELECT active FROM disciplines WHERE short_name = ?", (short,))
+        assert row is not None, f"{short} nao pode ser excluida"
+        assert row["active"] == 0, f"{short} deveria estar inativa"
+
+
+def test_frequencias_iniciais(ctx):
+    def frequencia(short):
+        return query_one("SELECT frequency FROM disciplines WHERE short_name = ?",
+                         (short,))["frequency"]
+
+    assert frequencia("CTB") == 3
+    assert frequencia("Portugues") == 2
+    for short in ATIVAS[2:]:
+        assert frequencia(short) == 1, short
+
+
+# --------------------------------------------------------------------------
+# Montagem da sequencia
+# --------------------------------------------------------------------------
+def test_cada_disciplina_aparece_conforme_a_frequencia(ctx):
+    nomes = [d["short_name"] for d in today_service.sequence()]
+    assert nomes.count("CTB") == 3
+    assert nomes.count("Portugues") == 2
+    for short in ATIVAS[2:]:
+        assert nomes.count(short) == 1, short
+    assert len(nomes) == 13  # 3 + 2 + (8 x 1)
+
+
+def test_disciplina_inativa_nao_entra_no_ciclo(ctx):
+    nomes = [d["short_name"] for d in today_service.sequence()]
+    for short in INATIVAS:
+        assert short not in nomes
+
+
+def test_prioridade_ordena_mas_nao_multiplica(ctx):
+    """Prioridade maxima com frequencia 1 aparece uma vez so - antes das outras."""
+    ctx.execute("UPDATE disciplines SET active = 0")
+    ctx.execute("UPDATE disciplines SET active = 1, priority = 'maxima', frequency = 1"
+                " WHERE short_name = 'CTB'")
     ctx.execute("UPDATE disciplines SET active = 1, priority = 'baixa', frequency = 1"
-                " WHERE id = 2")
+                " WHERE short_name = 'Penal'")
     ctx.commit()
 
-    base = today_iso()
-    maxima = baixa = 0
-    for n in range(14):
-        # Dias de "fallback" (nenhuma disciplina sorteada) nao contam: ali o
-        # sistema apenas evita uma tela vazia.
-        for item in today_service.objectives(add_days(base, n)):
-            if item["fallback"]:
-                continue
-            maxima += item["id"] == 1
-            baixa += item["id"] == 2
-    assert maxima == 10 and baixa == 2
+    nomes = [d["short_name"] for d in today_service.sequence()]
+    assert nomes == ["CTB", "Penal"]
 
 
-def test_disciplina_inativa_nunca_aparece(ctx):
-    ctx.execute("UPDATE disciplines SET active = 0 WHERE id = 1")
+def test_repeticoes_ficam_espalhadas(ctx):
+    """CTB 3x nao pode sair como CTB, CTB, CTB no comeco."""
+    nomes = [d["short_name"] for d in today_service.sequence()]
+    posicoes = [i for i, nome in enumerate(nomes) if nome == "CTB"]
+    for anterior, seguinte in zip(posicoes, posicoes[1:]):
+        assert seguinte - anterior > 1, nomes
+    # e a volta do ciclo tambem nao pode emendar duas iguais
+    assert nomes[0] != nomes[-1], nomes
+
+
+def test_ciclo_sem_disciplina_ativa(ctx):
+    ctx.execute("UPDATE disciplines SET active = 0")
     ctx.commit()
-    for n in range(14):
-        ids = [d["id"] for d in today_service.objectives(add_days(today_iso(), n))]
-        assert 1 not in ids
+    assert today_service.sequence() == []
+    assert today_service.current() is None
 
 
-def test_teto_de_disciplinas_por_dia(ctx):
-    from app.services import settings as settings_service
+# --------------------------------------------------------------------------
+# Posicao e avanco
+# --------------------------------------------------------------------------
+def test_hoje_mostra_uma_disciplina_so(client, ctx):
+    corpo = client.get("/").get_data(as_text=True)
+    atual = today_service.current()
 
-    settings_service.set_value("today_max_disciplines", 2)
-    assert len(today_service.objectives()) <= 2
+    assert "Proximo estudo" in corpo
+    assert atual["name"] in corpo
+    # Um unico botao Estudar: a tela nao e uma lista de disciplinas.
+    assert corpo.count(">Estudar</a>") == 1
+    assert corpo.count("/estudar?discipline_id=") == 1
+
+
+def test_abrir_o_formulario_nao_avanca(client, ctx):
+    antes = today_service.position()
+    atual = today_service.current()
+
+    for _ in range(3):
+        assert client.get(f"/estudar?discipline_id={atual['id']}").status_code == 200
+        client.get("/")
+
+    assert today_service.position() == antes
+    assert today_service.current()["id"] == atual["id"]
+
+
+def test_concluir_estudo_avanca_para_a_proxima(client, ctx):
+    _sequencia_curta(ctx)
+    assert [d["short_name"] for d in today_service.sequence()] == ["CTB", "Portugues", "CTB"]
+
+    primeira = today_service.current()
+    assert primeira["short_name"] == "CTB"
+
+    client.post("/estudar", data={"discipline_id": str(primeira["id"]),
+                                  "subject_name": "Infracoes"}, follow_redirects=True)
+    assert today_service.current()["short_name"] == "Portugues"
+
+    client.post("/estudar", data={"discipline_id": str(today_service.current()["id"]),
+                                  "subject_name": "Crase"}, follow_redirects=True)
+    assert today_service.current()["short_name"] == "CTB"
+
+
+def test_a_proxima_aparece_na_tela_imediatamente(client, ctx):
+    _sequencia_curta(ctx)
+    atual = today_service.current()
+    resposta = client.post("/estudar", data={"discipline_id": str(atual["id"]),
+                                             "subject_name": "Infracoes"},
+                           follow_redirects=True)
+    corpo = resposta.get_data(as_text=True)
+    assert "Lingua Portuguesa" in corpo
+
+
+def test_ciclo_da_a_volta(client, ctx):
+    _sequencia_curta(ctx)
+    vistos = []
+    for _ in range(4):
+        atual = today_service.current()
+        vistos.append(atual["short_name"])
+        client.post("/estudar", data={"discipline_id": str(atual["id"]),
+                                      "subject_name": "Assunto"}, follow_redirects=True)
+    assert vistos == ["CTB", "Portugues", "CTB", "CTB"]  # volta ao inicio
+
+
+def test_nao_estudar_nao_mexe_na_posicao(client, ctx):
+    atual = today_service.current()
+    for _ in range(5):
+        assert client.get("/").status_code == 200
+    assert today_service.current()["id"] == atual["id"]
+
+
+def test_posicao_sobrevive_a_mudanca_de_configuracao(client, ctx):
+    """Desativar uma disciplina encurta a sequencia sem estourar a posicao."""
+    for _ in range(9):
+        atual = today_service.current()
+        client.post("/estudar", data={"discipline_id": str(atual["id"]),
+                                      "subject_name": "X"}, follow_redirects=True)
+
+    ctx.execute("UPDATE disciplines SET active = 0 WHERE short_name IN ('Penal', 'Etica')")
+    ctx.commit()
+
+    atual = today_service.current()
+    assert atual is not None
+    assert 1 <= atual["position"] <= len(today_service.sequence())
+
+
+def test_reiniciar_ciclo_nao_apaga_nada(client, ctx):
+    atual = today_service.current()
+    client.post("/estudar", data={"discipline_id": str(atual["id"]),
+                                  "subject_name": "Infracoes", "questions_total": "10",
+                                  "questions_correct": "7"}, follow_redirects=True)
+
+    client.post("/disciplinas/ciclo/reiniciar", follow_redirects=True)
+
+    assert today_service.position() == 0
+    assert scalar("SELECT COUNT(*) FROM study_sessions", (), 0) == 1
+    assert scalar("SELECT COUNT(*) FROM questions", (), 0) == 1
+    assert scalar("SELECT COUNT(*) FROM subjects WHERE name = 'Infracoes'", (), 0) == 1
 
 
 # --------------------------------------------------------------------------
 # Registro de estudo
 # --------------------------------------------------------------------------
-def test_registrar_estudo_nao_conclui_o_assunto(client, app):
+def test_assunto_e_texto_livre_e_nao_duplica(client, ctx):
+    for _ in range(3):
+        client.post("/estudar", data={"discipline_id": "1", "subject_name": "Infracoes"},
+                    follow_redirects=True)
+    assert scalar("SELECT COUNT(*) FROM subjects WHERE lower(name) = 'infracoes'", (), 0) == 1
+    assert scalar("SELECT COUNT(*) FROM study_sessions", (), 0) == 3
+
+
+def test_estudo_sem_tempo_e_aceito(client, ctx):
+    client.post("/estudar", data={"discipline_id": "1", "subject_name": "Sinalizacao"},
+                follow_redirects=True)
+    row = query_one("SELECT * FROM study_sessions ORDER BY id DESC LIMIT 1")
+    assert row["actual_minutes"] == 0 and row["subject_id"] is not None
+
+
+def test_questoes_sao_registradas_sem_mexer_no_ciclo(client, ctx):
+    """Questoes entram no historico; o ciclo anda uma casa - nem mais, nem menos."""
+    antes = today_service.position()
     client.post("/estudar", data={
-        "discipline_id": "1", "subject_name": "Infracoes de transito", "minutes": "40",
+        "discipline_id": str(today_service.current()["id"]), "subject_name": "Placas",
+        "questions_total": "20", "questions_correct": "16",
     }, follow_redirects=True)
 
-    with app.app_context():
-        subject = query_one("SELECT * FROM subjects WHERE name = 'Infracoes de transito'")
-        assert subject["status"] == "em_andamento"
-        assert subject["completed_at"] is None
-        assert scalar("SELECT COUNT(*) FROM reviews", (), 0) == 0
+    row = query_one("SELECT * FROM questions ORDER BY id DESC LIMIT 1")
+    assert row["total"] == 20 and row["correct"] == 16 and row["percentage"] == 80.0
+    assert today_service.position() == (antes + 1) % len(today_service.sequence())
 
 
-def test_estudo_sem_tempo_e_aceito(client, app):
-    """O sistema funciona se voce estudou 6 horas ou nao anotou o tempo."""
-    client.post("/estudar", data={
-        "discipline_id": "1", "subject_name": "Sinalizacao",
-    }, follow_redirects=True)
-    with app.app_context():
-        row = query_one("SELECT * FROM study_sessions ORDER BY id DESC LIMIT 1")
-        assert row["actual_minutes"] == 0
-        assert row["subject_id"] is not None
-
-
-def test_mesmo_assunto_em_dias_diferentes_nao_duplica_o_assunto(client, app):
-    for dia in [add_days(today_iso(), -2), add_days(today_iso(), -1), today_iso()]:
-        client.post("/estudar", data={
-            "discipline_id": "1", "subject_name": "Infracoes", "date": dia,
-        }, follow_redirects=True)
-
-    with app.app_context():
-        assert scalar("SELECT COUNT(*) FROM subjects WHERE lower(name) = 'infracoes'", (), 0) == 1
-        assert scalar("SELECT COUNT(*) FROM study_sessions", (), 0) == 3
-
-
-def test_questoes_ficam_apenas_registradas(client, app):
-    client.post("/estudar", data={
-        "discipline_id": "1", "subject_name": "Placas", "minutes": "30",
-        "questions_total": "20", "questions_correct": "15",
-    }, follow_redirects=True)
-    with app.app_context():
-        row = query_one("SELECT * FROM questions ORDER BY id DESC LIMIT 1")
-        assert row["total"] == 20 and row["correct"] == 15 and row["percentage"] == 75.0
-        assert scalar("SELECT COUNT(*) FROM reviews", (), 0) == 0  # nao mexe na revisao
+def test_registrar_estudo_nao_gera_revisao(client, ctx):
+    client.post("/estudar", data={"discipline_id": "1", "subject_name": "Infracoes",
+                                  "questions_total": "10", "questions_correct": "9"},
+                follow_redirects=True)
+    subject = query_one("SELECT * FROM subjects WHERE name = 'Infracoes'")
+    assert subject["status"] == "em_andamento" and subject["completed_at"] is None
+    assert scalar("SELECT COUNT(*) FROM reviews", (), 0) == 0
 
 
 # --------------------------------------------------------------------------
-# Conclusao do assunto -> revisao espacada
+# Conclusao do assunto e revisao (independentes do ciclo)
 # --------------------------------------------------------------------------
-def _subject(client, app, name="Infracoes"):
+def _assunto(client, name="Infracoes"):
     client.post("/estudar", data={"discipline_id": "1", "subject_name": name},
                 follow_redirects=True)
-    with app.app_context():
-        return query_one("SELECT id FROM subjects WHERE name = ?", (name,))["id"]
+    return query_one("SELECT id FROM subjects WHERE name = ?", (name,))["id"]
 
 
-def test_concluir_assunto_pergunta_antes_de_agendar(client, app):
-    subject_id = _subject(client, app)
+def test_assunto_concluido_pode_gerar_revisao(client, ctx):
+    subject_id = _assunto(client)
     resposta = client.post(f"/assunto/{subject_id}/concluir", follow_redirects=True)
-    corpo = resposta.get_data(as_text=True)
-    assert "Deseja agendar as revisoes espacadas?" in corpo
+    assert "Deseja agendar as revisoes espacadas?" in resposta.get_data(as_text=True)
+    assert scalar("SELECT COUNT(*) FROM reviews", (), 0) == 0  # ainda nao respondeu
 
-    with app.app_context():
-        assert query_one("SELECT * FROM subjects WHERE id = ?",
-                         (subject_id,))["status"] == "concluida"
-        assert scalar("SELECT COUNT(*) FROM reviews", (), 0) == 0  # ainda nao respondeu
-
-
-def test_responder_sim_cria_a_sequencia(client, app):
-    subject_id = _subject(client, app)
-    client.post(f"/assunto/{subject_id}/concluir", follow_redirects=True)
     client.post(f"/assunto/{subject_id}/concluir", data={"agendar": "1"},
                 follow_redirects=True)
-
-    with app.app_context():
-        review = query_one("SELECT * FROM reviews ORDER BY id DESC LIMIT 1")
-        assert review["subject_id"] == subject_id
-        assert review["interval_days"] == 1
-        assert review["next_date"] == add_days(today_iso(), 1)
-        assert scalar("SELECT COUNT(*) FROM reviews", (), 0) == 1
+    review = query_one("SELECT * FROM reviews ORDER BY id DESC LIMIT 1")
+    assert review["subject_id"] == subject_id
+    assert review["interval_days"] == 1
+    assert review["next_date"] == add_days(today_iso(), 1)
 
 
-def test_responder_nao_nao_cria_revisao(client, app):
-    subject_id = _subject(client, app)
+def test_responder_nao_nao_cria_revisao(client, ctx):
+    subject_id = _assunto(client)
     client.post(f"/assunto/{subject_id}/concluir", data={"agendar": "0"},
                 follow_redirects=True)
-    with app.app_context():
-        assert scalar("SELECT COUNT(*) FROM reviews", (), 0) == 0
+    assert scalar("SELECT COUNT(*) FROM reviews", (), 0) == 0
 
 
-def test_concluir_duas_vezes_nao_duplica_revisao(client, app):
-    subject_id = _subject(client, app)
+def test_concluir_duas_vezes_nao_duplica_revisao(client, ctx):
+    subject_id = _assunto(client)
     for _ in range(3):
         client.post(f"/assunto/{subject_id}/concluir", data={"agendar": "1"},
                     follow_redirects=True)
-    with app.app_context():
-        assert scalar("SELECT COUNT(*) FROM reviews", (), 0) == 1
+    assert scalar("SELECT COUNT(*) FROM reviews", (), 0) == 1
 
 
-def test_reabrir_assunto_volta_para_em_andamento(client, app):
-    subject_id = _subject(client, app)
+def test_reabrir_assunto_volta_para_em_andamento(client, ctx):
+    subject_id = _assunto(client)
     client.post(f"/assunto/{subject_id}/concluir", data={"agendar": "0"},
                 follow_redirects=True)
     client.post(f"/assunto/{subject_id}/reabrir", follow_redirects=True)
-    with app.app_context():
-        row = query_one("SELECT * FROM subjects WHERE id = ?", (subject_id,))
-        assert row["status"] == "em_andamento" and row["completed_at"] is None
+    row = query_one("SELECT * FROM subjects WHERE id = ?", (subject_id,))
+    assert row["status"] == "em_andamento" and row["completed_at"] is None
 
 
-# --------------------------------------------------------------------------
-# Sem punicao
-# --------------------------------------------------------------------------
-def test_nao_estudar_nao_gera_pendencia(client, app):
-    """Nenhuma tarefa e criada por causa de um dia sem estudo."""
-    with app.app_context():
-        antes = (scalar("SELECT COUNT(*) FROM study_sessions", (), 0),
-                 scalar("SELECT COUNT(*) FROM reviews", (), 0))
+def test_concluir_revisao_nao_mexe_na_posicao_do_ciclo(client, ctx):
+    """Revisao e ciclo sao independentes: uma nao mexe na outra."""
+    review_id = reviews_service.create_review(discipline_id=1, title="Crase")
+    ctx.execute("UPDATE reviews SET next_date = ? WHERE id = ?", (today_iso(), review_id))
+    ctx.commit()
 
-    for _ in range(5):
-        assert client.get("/").status_code == 200
+    antes = today_service.position()
+    atual = today_service.current()
 
-    with app.app_context():
-        assert (scalar("SELECT COUNT(*) FROM study_sessions", (), 0),
-                scalar("SELECT COUNT(*) FROM reviews", (), 0)) == antes
+    corpo = client.get("/").get_data(as_text=True)
+    assert "Crase" in corpo                      # a revisao aparece
+    assert atual["name"] in corpo                # e o ciclo continua onde estava
 
+    client.post(f"/revisoes/{review_id}/concluir", follow_redirects=True)
 
-def test_fluxo_completo_do_usuario(client, app):
-    """Estudar 3 dias -> terminar -> agendar -> revisar D1 -> proxima e D7."""
-    for dia in [add_days(today_iso(), -2), add_days(today_iso(), -1), today_iso()]:
-        client.post("/estudar", data={
-            "discipline_id": "1", "subject_name": "Infracoes de transito", "date": dia,
-            "minutes": "45"}, follow_redirects=True)
-
-    with app.app_context():
-        subject_id = query_one(
-            "SELECT id FROM subjects WHERE name = 'Infracoes de transito'")["id"]
-
-    client.post(f"/assunto/{subject_id}/concluir", data={"agendar": "1"},
-                follow_redirects=True)
-    with app.app_context():
-        review = query_one("SELECT * FROM reviews ORDER BY id DESC LIMIT 1")
-        review_id, next_date = review["id"], review["next_date"]
-
-    # A revisao D1 aparece na fila no dia previsto.
-    with app.app_context():
-        from app.services import reviews as reviews_service
-        fila = reviews_service.due(next_date)
-        assert [r["id"] for r in fila] == [review_id]
-        assert fila[0]["label"] == "D1"
-
-    client.post(f"/revisoes/{review_id}/concluir", data={"done_date": next_date},
-                follow_redirects=True)
-    with app.app_context():
-        row = query_one("SELECT * FROM reviews WHERE id = ?", (review_id,))
-        assert row["interval_days"] == 7
-        assert row["next_date"] == add_days(next_date, 7)
-        assert scalar("SELECT COUNT(*) FROM reviews", (), 0) == 1
-
-
-def test_tela_de_disciplinas_salva_prioridade_frequencia_e_ativa(client, app):
-    """As tres unicas decisoes da tela de Disciplinas gravam de verdade."""
-    client.post("/disciplinas/pesos", data={
-        "today_max_disciplines": "3",
-        "row_1": "1", "priority_1": "baixa", "frequency_1": "2", "active_1": "1",
-        "row_2": "1", "priority_2": "maxima", "frequency_2": "7",  # sem active = inativa
-    }, follow_redirects=True)
-
-    with app.app_context():
-        from app.services import settings as settings_service
-
-        um = query_one("SELECT * FROM disciplines WHERE id = 1")
-        dois = query_one("SELECT * FROM disciplines WHERE id = 2")
-        assert um["priority"] == "baixa" and um["frequency"] == 2 and um["active"] == 1
-        assert dois["frequency"] == 7 and dois["active"] == 0
-        assert settings_service.get_int("today_max_disciplines") == 3
-        assert 2 not in [d["id"] for d in today_service.objectives()]
+    assert today_service.position() == antes
+    assert today_service.current()["id"] == atual["id"]
+    assert query_one("SELECT interval_days FROM reviews WHERE id = ?",
+                     (review_id,))["interval_days"] == 7

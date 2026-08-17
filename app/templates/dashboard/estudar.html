@@ -43,7 +43,7 @@
     </div>
 
     <details class="box">
-      <summary>Questoes (opcional)</summary>
+      <summary>Fez questoes? (opcional)</summary>
       <div class="form-grid cols-2">
         <div class="field">
           <label for="questions_total">Questoes</label>
@@ -54,11 +54,14 @@
           <input type="number" id="questions_correct" name="questions_correct" min="0" placeholder="0">
         </div>
       </div>
-      <div class="tiny dim">Fica apenas registrado. Nao altera os objetivos nem as revisoes.</div>
+      <div class="tiny dim">
+        O percentual e calculado sozinho. Fica apenas registrado: nao altera o ciclo
+        nem as revisoes.
+      </div>
     </details>
 
     <div class="form-actions">
-      <button class="btn primary big" type="submit">Salvar estudo</button>
+      <button class="btn primary big" type="submit">Concluir estudo</button>
       <a class="btn ghost" href="{{ url_for('dashboard.index') }}">Cancelar</a>
     </div>
 
@@ -68,7 +71,8 @@
     </label>
     <div class="tiny dim">
       Sem marcar isso, o assunto continua em andamento - voce pode registrar estudo
-      no mesmo assunto quantos dias quiser.
+      no mesmo assunto quantos dias quiser. Concluir o estudo avanca o ciclo para a
+      proxima disciplina; sair desta tela sem concluir nao avanca nada.
     </div>
   </form>
 </section>

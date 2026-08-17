@@ -29,8 +29,10 @@ def index():
     today = today_iso()
     return render_template(
         "dashboard/index.html",
-        objectives=today_service.objectives(today),
-        open_subjects=today_service.open_subjects(limit=8),
+        # Uma disciplina, a da vez. Abrir esta tela nao avanca o ciclo.
+        next_study=today_service.current(),
+        last_study=today_service.last_study(),
+        open_subjects=today_service.open_subjects(limit=6),
         due_reviews=reviews_service.due(today),
         review_counts=reviews_service.counts(today),
         summary=today_service.summary(today),
@@ -84,9 +86,15 @@ def study_save():
         " actual_minutes, notes, completed) VALUES (?, ?, ?, 'teoria', 0, ?, ?, 1)",
         (date, discipline_id, subject_id, minutes, notes))
 
+    # O ciclo anda AQUI e so aqui: estudo concluido, proxima disciplina.
+    # Abrir o formulario (GET /estudar) nunca mexe na posicao.
+    proxima = today_service.advance()
+
     messages = ["Estudo registrado."]
     if minutes:
         messages[0] = f"Estudo registrado ({minutes} min)."
+    if proxima:
+        messages.append(f"Proximo no ciclo: {proxima['name']}.")
 
     # Questoes: apenas registro, nunca interferem em nada automaticamente.
     total = as_int(request.form.get("questions_total"), 0)

@@ -29,8 +29,9 @@ def index():
         statuses=DISCIPLINE_STATUS,
         priorities=PRIORITIES,
         frequency_labels=today_service.FREQUENCY_LABELS,
-        max_per_day=today_service.max_per_day(),
-        objectives=today_service.objectives(),
+        # A sequencia e derivada: mudar prioridade/frequencia/ativa ja a regera.
+        sequence=today_service.sequence(),
+        cycle_position=today_service.position() + 1,
     )
 
 
@@ -140,12 +141,11 @@ def update(discipline_id: int):
 
 @bp.route("/pesos", methods=["POST"])
 def bulk_update():
-    """Edicao rapida direto na listagem: prioridade, frequencia e ativa/inativa."""
-    if "today_max_disciplines" in request.form:
-        settings_service.set_value(
-            "today_max_disciplines",
-            max(0, min(20, as_int(request.form.get("today_max_disciplines"), 5))))
+    """Edicao rapida direto na listagem: prioridade, frequencia e ativa/inativa.
 
+    A sequencia do ciclo e derivada destes campos - salvar aqui ja a regenera,
+    sem apagar estudo, questao nem revisao. A posicao atual e preservada.
+    """
     for row in query_all("SELECT id FROM disciplines"):
         did = row["id"]
         # Checkbox nao enviado != desmarcado: so mexe em `active` quando a linha
@@ -177,7 +177,19 @@ def bulk_update():
             value = request.form.get(f"status_{did}")
             if value in DISCIPLINE_STATUS:
                 execute("UPDATE disciplines SET status = ? WHERE id = ?", (value, did))
-    flash("Disciplinas atualizadas.", "success")
+    flash("Disciplinas atualizadas. A sequencia do ciclo foi regerada.", "success")
+    return redirect(url_for("disciplines.index"))
+
+
+@bp.route("/ciclo/reiniciar", methods=["POST"])
+def restart_cycle():
+    """Volta o ciclo para a primeira disciplina da sequencia.
+
+    Nao apaga nada: historico de estudos, questoes e revisoes ficam intactos.
+    """
+    today_service.reset_position()
+    flash("Ciclo reiniciado na primeira disciplina. Nenhum registro foi apagado.",
+          "success")
     return redirect(url_for("disciplines.index"))
 
 

@@ -37,7 +37,8 @@ def test_overall_agrega_periodo(ctx):
 def test_by_discipline_traz_todas_mesmo_sem_dados(ctx):
     _questions(1, 20, 10)
     linhas = stats.by_discipline(days=30)
-    assert len(linhas) == 14
+    assert len(linhas) == 10                                    # as ativas do ciclo
+    assert len(stats.by_discipline(days=30, active_only=False)) == 14  # inativas seguem la
     com_dados = [r for r in linhas if r["questions"]]
     assert len(com_dados) == 1 and com_dados[0]["accuracy"] == 50.0
     sem_dados = [r for r in linhas if not r["questions"]][0]

@@ -26,7 +26,6 @@ FIELDS = {
     "folga_hours": as_float,
     "plantoes_per_cycle": as_int,
     "folgas_per_cycle": as_int,
-    "today_max_disciplines": as_int,
     "mock_default_minutes": parse_minutes,
     "mock_default_questions": as_int,
     "taf_minutes_per_cycle": parse_minutes,

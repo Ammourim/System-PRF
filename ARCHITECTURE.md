@@ -56,16 +56,32 @@ passam por rota nenhuma.
 Tudo o mais e secundario e vive fora da tela inicial. Detalhes da simplificacao:
 `SIMPLIFICACAO.md`.
 
-### Objetivos do dia (`services/today.py`)
+### O ciclo (`services/today.py`)
 
-Cada disciplina ativa tem uma **frequencia** (1 a 7 dias por semana; o padrao vem da
-prioridade: maxima 5, alta 3, media 2, baixa 1). Um espalhamento tipo Bresenham garante
-que, em quaisquer 7 dias consecutivos, a disciplina aparece exatamente `frequencia`
-vezes - e o deslocamento por id evita que todas caiam no mesmo dia.
+O ciclo e uma **sequencia** de disciplinas mais uma **posicao**. A tela HOJE mostra a
+disciplina da posicao atual - uma so, nunca uma lista.
 
-A funcao e pura em relacao ao banco: **abrir a tela nao grava nada** e a mesma data
-sempre produz a mesma lista. Nao ha minutos, blocos, metas nem distribuicao matematica.
-Um dia sem estudo nao gera pendencia: amanha o dia e recalculado do zero.
+    sequencia:  CTB, Portugues, Administrativo, Constitucional, CTB, Informatica, ...
+    posicao:    ^
+
+  * **frequencia** (1 a 7) = quantas vezes a disciplina aparece em uma volta;
+  * **prioridade** = a ordem. Nao multiplica ninguem: prioridade maxima com
+    frequencia 1 aparece uma vez so;
+  * **inativa** = fora da sequencia, com todo o historico preservado.
+
+`build_sequence()` da a cada aparicao uma posicao fracionaria `(i + fase) / frequencia`,
+onde `fase` desloca a disciplina conforme a ordem de prioridade. Sem a fase, todas as
+disciplinas de frequencia 1 cairiam no mesmo ponto; com ela, as repeticoes de quem
+aparece mais vezes ficam distribuidas entre as demais. Empate de posicao vai para quem
+aparece menos vezes, o que impede duas copias da mesma disciplina se encostarem.
+
+A sequencia e **derivada**: nao existe tabela de ciclo no fluxo novo. Mudar prioridade,
+frequencia ou ativa/inativa ja a regenera, sem apagar nada. So a posicao e persistida
+(`settings.cycle_position`).
+
+**A posicao avanca em um unico lugar**: `POST /estudar`, quando o estudo e concluido.
+Abrir o formulario e desistir nao avanca; um dia sem estudar nao avanca. Nenhuma data,
+job ou virada de dia mexe nisso - e o que torna o sistema compativel com a escala 12x36.
 
 ### Assunto e conclusao (`services/subjects.py`)
 

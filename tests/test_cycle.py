@@ -19,6 +19,8 @@ def test_spread_intercala_disciplinas():
 
 def test_spread_nao_repete_disciplina_em_sequencia_no_plano_real(ctx):
     """O ciclo inicial (14 disciplinas, 26 blocos) nao pode ter dois blocos iguais seguidos."""
+    ctx.execute("UPDATE disciplines SET active = 1")   # ciclo detalhado: todas entram
+    ctx.commit()
     rows = query_all("SELECT * FROM disciplines WHERE active = 1")
     ordered = cycle_service.spread(cycle_service.plan_from_disciplines(rows))
     assert len(ordered) == 26

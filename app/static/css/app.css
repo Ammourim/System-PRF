@@ -536,3 +536,21 @@ details.box > summary { cursor: pointer; font-size: 13px; color: var(--text-2);
   padding: 4px 0; }
 details.box[open] > summary { color: var(--text); font-weight: 550; }
 td.center, th.center { text-align: center; }
+
+/* --------------------------------------------------- proximo estudo (ciclo) */
+.card.proximo {
+  border: 1px solid var(--accent); padding: 20px;
+  background: linear-gradient(180deg, var(--accent-soft), var(--surface) 70%);
+  margin-bottom: 18px;
+}
+.proximo-nome { font-size: 28px; font-weight: 650; letter-spacing: -.02em; margin: 4px 0 2px; }
+.proximo-meta { color: var(--text-2); font-size: 13px; margin-bottom: 14px; }
+.seq { display: flex; flex-wrap: wrap; gap: 6px; }
+.seq .item {
+  display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px;
+  border: 1px solid var(--border); border-radius: 999px; font-size: 12px;
+  background: var(--surface);
+}
+.seq .item .n { color: var(--text-3); font-variant-numeric: tabular-nums; }
+.seq .item.atual { border-color: var(--accent); background: var(--accent-soft);
+  color: var(--accent); font-weight: 600; }

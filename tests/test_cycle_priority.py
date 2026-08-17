@@ -5,10 +5,24 @@ Cada teste aqui corresponde a um problema apontado na auditoria
 saia do numero de blocos e o arredondamento distorcia as metas em silencio.
 """
 
+import pytest
+
 from app.db import query_all, query_one, scalar
 from app.services import adaptive
 from app.services import cycle as cycle_service
 from app.utils import today_iso
+
+
+@pytest.fixture(autouse=True)
+def todas_ativas(ctx):
+    """Estes testes sao do ciclo detalhado (legado), que monta TODAS as ativas.
+
+    A configuracao atual do sistema deixa quatro disciplinas inativas de
+    proposito; aqui a premissa e outra, entao ela e declarada explicitamente.
+    """
+    ctx.execute("UPDATE disciplines SET active = 1")
+    ctx.commit()
+    return ctx
 
 
 def _plan(ctx=None, goal=1800):

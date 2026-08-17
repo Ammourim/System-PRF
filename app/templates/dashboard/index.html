@@ -44,42 +44,32 @@
   {% endif %}
 </section>
 
-{# ========================================================= OBJETIVOS DO DIA #}
-<section class="card hoje">
+{# ========================================================= PROXIMO ESTUDO #}
+<section class="card proximo">
   <div class="card-head">
-    <div class="card-title big">&#128218; Estudar</div>
+    <div class="card-title big">&#128218; Proximo estudo</div>
     <div class="spacer"></div>
-    <a class="btn sm ghost" href="{{ url_for('disciplines.index') }}">Ajustar disciplinas</a>
+    {% if next_study %}
+      <span class="tiny dim">posicao {{ next_study.position }} de {{ next_study.total }} no ciclo</span>
+    {% endif %}
+    <a class="btn sm ghost" href="{{ url_for('disciplines.index') }}">Configurar ciclo</a>
   </div>
 
-  {% if objectives %}
-    {% if objectives[0].fallback %}
-      <div class="tiny dim mb">
-        Nenhuma disciplina caiu na frequencia de hoje - mostrando as de maior prioridade.
-      </div>
-    {% endif %}
-    <div class="list">
-      {% for d in objectives %}
-        <div class="list-item">
-          <div class="grow">
-            <div class="name big">{{ d.name }}</div>
-            <div class="sub">
-              <span class="badge {{ 'accent' if d.priority == 'maxima' }}">{{ d.priority_label }}</span>
-              <span class="dim">{{ d.frequency_label }}</span>
-              {% if d.current_subject %}
-                &middot; em andamento: <span class="strong">{{ d.current_subject }}</span>
-              {% endif %}
-              {% if d.studied_today %}<span class="text-good strong">&middot; estudado hoje</span>{% endif %}
-            </div>
-          </div>
-          <a class="btn primary" href="{{ url_for('dashboard.study_form', discipline_id=d.id) }}">Estudar</a>
-        </div>
-      {% endfor %}
+  {% if next_study %}
+    <div class="proximo-nome">{{ next_study.name }}</div>
+    <div class="proximo-meta">
+      Prioridade: <span class="strong">{{ next_study.priority_label }}</span>
+      <span class="dim">&middot; depois vem {{ next_study.next_name }}</span>
+    </div>
+    <a class="btn primary big" href="{{ url_for('dashboard.study_form', discipline_id=next_study.id) }}">Estudar</a>
+    <div class="tiny dim mt">
+      O ciclo so avanca quando voce concluir o registro do estudo. Abrir o
+      formulario e desistir nao perde a disciplina.
     </div>
   {% else %}
-    <div class="empty">
-      Nenhuma disciplina ativa.
-      <a href="{{ url_for('disciplines.index') }}">Cadastre ou reative uma disciplina.</a>
+    <div class="empty">Nao ha disciplinas ativas no ciclo.</div>
+    <div class="form-actions">
+      <a class="btn primary" href="{{ url_for('disciplines.index') }}">Configurar ciclo</a>
     </div>
   {% endif %}
 </section>
@@ -90,7 +80,7 @@
     <div class="card-head">
       <div class="card-title">Assuntos em andamento</div>
       <div class="spacer"></div>
-      <span class="tiny dim">Termine um assunto para iniciar as revisoes</span>
+      <span class="tiny dim">Conclua um assunto para agendar as revisoes</span>
     </div>
     <div class="list">
       {% for s in open_subjects %}
@@ -103,7 +93,7 @@
             </div>
           </div>
           <form method="post" action="{{ url_for('dashboard.finish_subject', subject_id=s.id) }}" class="inline-form">
-            <button class="btn sm" type="submit">Terminei este assunto</button>
+            <button class="btn sm" type="submit">Conclui este assunto</button>
           </form>
         </div>
       {% endfor %}
@@ -113,7 +103,16 @@
 
 {# ==================================================================== RESUMO #}
 <section class="card flat">
-  <div class="card-head"><div class="card-title">&#128202; Resumo de hoje</div></div>
+  <div class="card-head">
+    <div class="card-title">&#128202; Resumo de hoje</div>
+    <div class="spacer"></div>
+    {% if last_study %}
+      <span class="tiny dim">
+        Ultimo estudo: {{ last_study.discipline_name }}{% if last_study.subject_name %} &mdash; {{ last_study.subject_name }}{% endif %}
+        ({{ last_study.date|date_br }})
+      </span>
+    {% endif %}
+  </div>
   <div class="grid cols-3">
     <div class="metric">
       <div class="label">Estudos registrados</div>

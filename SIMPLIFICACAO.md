@@ -60,26 +60,24 @@ registro excluido. Backup gerado antes de tudo em `backups/`.
 - assuntos que ja tinham revisao receberam `completed_at` recuperado da revisao,
   e o status virou `concluida` (antes: `revisao`/`consolidada`).
 
-### Como o sistema escolhe as disciplinas do dia
+### Como o sistema escolhe a disciplina (revisado na migration 005)
 
-Cada disciplina ativa tem uma **frequencia** de 1 a 7 (dias por semana). O padrao
-vem da prioridade e e editavel por disciplina:
+O ciclo e uma **sequencia** com uma **posicao**. A tela HOJE mostra a disciplina
+da vez - uma so.
 
-| Prioridade | Frequencia padrao |
-|---|---|
-| Maxima | 5x por semana |
-| Alta | 3x por semana |
-| Media | 2x por semana |
-| Baixa | 1x por semana |
+  * **frequencia** = quantas vezes a disciplina aparece em uma volta do ciclo;
+  * **prioridade** = a ordem, nunca a quantidade;
+  * **inativa** = fora do ciclo, com o historico preservado.
 
-A escolha e deterministica: a mesma data sempre da a mesma lista, abrir a tela
-dez vezes nao muda nada e nao grava nada. Os dias sao espalhados pela semana
-(nao ficam colados) e cada disciplina tem um deslocamento proprio, para nao cair
-tudo no mesmo dia. "Maximo por dia" (padrao 5) corta a lista pelas de maior
-prioridade.
+Configuracao atual: CTB 3x, Portugues 2x, as outras oito ativas 1x; Espanhol,
+Direitos Humanos, Geopolitica e Fisica inativas. Sequencia resultante:
 
-Nao existe agenda: nao estudar hoje nao gera pendencia, nao reorganiza nada e
-nao cria tarefa nenhuma. Amanha o dia e calculado do zero.
+    CTB, Portugues, Administrativo, Constitucional, CTB, Informatica, RLM,
+    Portugues, Leg. Especial, CTB, Etica, Penal, Processo Penal
+
+A posicao avanca **so** quando um estudo e concluido. Abrir o formulario e
+desistir nao avanca. Nao estudar hoje nao avanca: amanha voce continua na mesma
+disciplina. Nao existe agenda nem calendario.
 
 ### Fluxo diario
 

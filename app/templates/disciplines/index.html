@@ -5,21 +5,42 @@
 {% block heading %}Disciplinas{% endblock %}
 {% block subtitle %}
   <div class="subtitle">
-    Duas decisoes montam o seu dia: <strong>prioridade</strong> (a ordem em que aparecem)
-    e <strong>frequencia</strong> (quantos dias por semana a disciplina aparece).
+    Duas decisoes montam o ciclo: <strong>prioridade</strong> (a ordem) e
+    <strong>frequencia</strong> (quantas vezes a disciplina aparece na sequencia).
+    Esta tela e de configuracao - a lista de estudo do dia fica em
+    <a href="{{ url_for('dashboard.index') }}">Hoje</a>.
   </div>
 {% endblock %}
 
 {% block content %}
 
 <section class="card flat">
-  <div class="card-head"><div class="card-title">Objetivos de hoje, com a configuracao atual</div></div>
-  {% if objectives %}
-    <div class="row tight">
-      {% for d in objectives %}<span class="badge accent">{{ d.short_name or d.name }}</span>{% endfor %}
+  <div class="card-head">
+    <div class="card-title">Sequencia do ciclo</div>
+    <div class="spacer"></div>
+    {% if sequence %}
+      <span class="tiny dim">{{ sequence|length }} estudos ate voltar ao inicio</span>
+      <form method="post" action="{{ url_for('disciplines.restart_cycle') }}" class="inline-form"
+            data-confirm="Voltar o ciclo para a primeira disciplina? Nenhum estudo, questao ou revisao e apagado.">
+        <button class="btn sm ghost" type="submit">Reiniciar na primeira</button>
+      </form>
+    {% endif %}
+  </div>
+  {% if sequence %}
+    <div class="seq">
+      {% for d in sequence %}
+        <span class="item {{ 'atual' if d.position == cycle_position }}">
+          <span class="n">{{ d.position }}</span>{{ d.short_name or d.name }}
+        </span>
+      {% endfor %}
+    </div>
+    <div class="tiny dim mt">
+      A sequencia e recalculada sozinha quando voce salva prioridade, frequencia ou
+      ativa/inativa - e a posicao atual (destacada) e preservada. O ciclo nao usa
+      calendario: ele so anda quando voce conclui um estudo.
     </div>
   {% else %}
-    <div class="empty">Nenhuma disciplina ativa.</div>
+    <div class="empty">Nenhuma disciplina ativa - o ciclo esta vazio.</div>
   {% endif %}
 </section>
 
@@ -28,19 +49,14 @@
     <div class="card-head">
       <div class="card-title">Prioridade e frequencia</div>
       <div class="spacer"></div>
-      <div class="field inline-field">
-        <label for="today_max_disciplines">Maximo por dia</label>
-        <input type="number" id="today_max_disciplines" name="today_max_disciplines"
-               value="{{ max_per_day }}" min="0" max="20" style="width:70px">
-      </div>
       <button class="btn primary sm" type="submit">Salvar</button>
     </div>
 
     <div class="tiny dim mb">
-      Frequencia = dias por semana. 7 = todos os dias, 1 = uma vez por semana.
-      O sistema espalha esses dias ao longo da semana e a lista de hoje e sempre a
-      mesma se voce abrir a tela varias vezes. "Maximo por dia" corta a lista pelas
-      de maior prioridade (0 = sem limite).
+      Frequencia = quantas vezes a disciplina aparece em uma volta do ciclo.
+      Prioridade define a ordem, nao a quantidade: uma disciplina de prioridade
+      maxima com frequencia 1 aparece uma vez so. Disciplina inativa fica
+      cadastrada, com todo o historico, mas fora do ciclo.
     </div>
 
     <div class="table-wrap">

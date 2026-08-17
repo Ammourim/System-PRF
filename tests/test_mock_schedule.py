@@ -164,7 +164,8 @@ def test_simulado_ruim_pesa_mesmo_com_questoes_boas(ctx):
 def test_simulado_segura_a_reducao(ctx):
     """Desempenho alto no dia a dia, mas simulado na faixa de atencao -> manter."""
     # Fisica e complementar e comeca 'nao iniciada' - so faz sentido avaliar depois de iniciada.
-    ctx.execute("UPDATE disciplines SET status = 'em_andamento' WHERE id = 14")
+    # Ela tambem comeca fora do ciclo: para virar sugestao, precisa estar ativa.
+    ctx.execute("UPDATE disciplines SET status = 'em_andamento', active = 1 WHERE id = 14")
     ctx.commit()
     insert("INSERT INTO questions (date, discipline_id, total, correct, wrong, percentage)"
            " VALUES (?, 14, 40, 36, 4, 90.0)", (today_iso(),))

@@ -93,15 +93,17 @@ def _ensure_disciplines(conn: sqlite3.Connection) -> None:
         return
     for position, item in enumerate(DISCIPLINES, start=1):
         name, short, incidence, priority, status, block, target, min_blocks = item
-        # Frequencia (dias por semana nos objetivos) nasce da prioridade e pode
-        # ser editada em Disciplinas.
-        frequency = {"maxima": 5, "alta": 3, "media": 2, "baixa": 1}.get(priority, 2)
+        # Frequencia = quantas vezes a disciplina aparece em uma volta do ciclo.
+        # As duas de peso tem valor proprio; o resto entra uma vez por volta.
+        frequency = {"CTB": 3, "Portugues": 2}.get(short, 1)
+        # Prioridade baixa comeca fora do ciclo (cadastrada, porem inativa).
+        active = 0 if priority == "baixa" else 1
         conn.execute(
             "INSERT INTO disciplines (name, short_name, incidence, priority, status,"
-            " block_minutes, target_minutes, min_blocks, position, frequency)"
-            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            " block_minutes, target_minutes, min_blocks, position, frequency, active)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (name, short, incidence, priority, status, block, target, min_blocks, position,
-             frequency),
+             frequency, active),
         )
 
 
