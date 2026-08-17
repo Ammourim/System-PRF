@@ -26,7 +26,7 @@ def test_dados_base_carregados(ctx):
     ctb = ctx.execute("SELECT * FROM disciplines WHERE short_name = 'CTB'").fetchone()
     assert ctb["incidence"] == 25.0
     assert ctb["priority"] == "maxima"
-    assert ctb["target_minutes"] == 420
+    assert ctb["target_minutes"] == 450   # 5 blocos de 90 min, sem residuo
 
 
 def test_dados_persistem_entre_conexoes(app):

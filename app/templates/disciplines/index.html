@@ -3,78 +3,148 @@
 
 {% block title %}Disciplinas - Sistema PRF{% endblock %}
 {% block heading %}Disciplinas{% endblock %}
-{% block subtitle %}<div class="subtitle">Incidencia historica informada por voce. Quando o edital sair, edite os pesos aqui.</div>{% endblock %}
+{% block subtitle %}
+  <div class="subtitle">
+    Duas decisoes montam o seu dia: <strong>prioridade</strong> (a ordem em que aparecem)
+    e <strong>frequencia</strong> (quantos dias por semana a disciplina aparece).
+  </div>
+{% endblock %}
 
 {% block content %}
+
+<section class="card flat">
+  <div class="card-head"><div class="card-title">Objetivos de hoje, com a configuracao atual</div></div>
+  {% if objectives %}
+    <div class="row tight">
+      {% for d in objectives %}<span class="badge accent">{{ d.short_name or d.name }}</span>{% endfor %}
+    </div>
+  {% else %}
+    <div class="empty">Nenhuma disciplina ativa.</div>
+  {% endif %}
+</section>
+
 <section class="card">
   <form method="post" action="{{ url_for('disciplines.bulk_update') }}">
     <div class="card-head">
-      <div class="card-title">Pesos, prioridade e metas</div>
+      <div class="card-title">Prioridade e frequencia</div>
       <div class="spacer"></div>
-      <span class="tiny dim">soma da incidencia: {{ incidence_total|num(2) }}% &middot; soma das metas: {{ total_target|minutes }}</span>
-      <button class="btn primary sm" type="submit">Salvar alteracoes</button>
+      <div class="field inline-field">
+        <label for="today_max_disciplines">Maximo por dia</label>
+        <input type="number" id="today_max_disciplines" name="today_max_disciplines"
+               value="{{ max_per_day }}" min="0" max="20" style="width:70px">
+      </div>
+      <button class="btn primary sm" type="submit">Salvar</button>
     </div>
+
+    <div class="tiny dim mb">
+      Frequencia = dias por semana. 7 = todos os dias, 1 = uma vez por semana.
+      O sistema espalha esses dias ao longo da semana e a lista de hoje e sempre a
+      mesma se voce abrir a tela varias vezes. "Maximo por dia" corta a lista pelas
+      de maior prioridade (0 = sem limite).
+    </div>
+
     <div class="table-wrap">
       <table>
         <thead>
-          <tr><th>Disciplina</th><th class="right">Incidencia %</th><th>Prioridade</th><th>Status</th>
-            <th class="right">Meta/ciclo (min)</th><th class="right">Meta em horas</th>
-            <th class="right">Tempo total</th><th class="right">Questoes</th><th class="right">Acerto</th></tr>
+          <tr>
+            <th>Disciplina</th>
+            <th>Prioridade</th>
+            <th class="right">Frequencia</th>
+            <th class="center">Ativa</th>
+            <th class="right">Tempo total</th>
+            <th class="right">Ultimo estudo</th>
+          </tr>
         </thead>
         <tbody>
           {% for d in disciplines %}
-            <tr>
-              <td class="strong"><a href="{{ url_for('disciplines.detail', discipline_id=d.id) }}">{{ d.name }}</a></td>
-              <td class="right"><input type="text" name="incidence_{{ d.id }}" value="{{ d.incidence|num(2) }}" style="width:80px; text-align:right"></td>
+            <tr class="{{ '' if d.active else 'dim' }}">
+              <td class="strong">
+                <input type="hidden" name="row_{{ d.id }}" value="1">
+                <a href="{{ url_for('disciplines.detail', discipline_id=d.id) }}">{{ d.name }}</a>
+              </td>
               <td>
                 <select name="priority_{{ d.id }}" style="width:auto">
-                  {% for key, label in priorities.items() %}
-                    <option value="{{ key }}" {% if d.priority == key %}selected{% endif %}>{{ label }}</option>
+                  {% for key, lbl in priorities.items() %}
+                    <option value="{{ key }}" {% if d.priority == key %}selected{% endif %}>{{ lbl }}</option>
                   {% endfor %}
                 </select>
               </td>
-              <td>
-                <select name="status_{{ d.id }}" style="width:auto">
-                  {% for key, label in statuses.items() %}
-                    <option value="{{ key }}" {% if d.status == key %}selected{% endif %}>{{ label }}</option>
+              <td class="right">
+                <select name="frequency_{{ d.id }}" style="width:auto">
+                  {% for n, lbl in frequency_labels.items() %}
+                    <option value="{{ n }}" {% if d.frequency_value == n %}selected{% endif %}>{{ n }} &middot; {{ lbl }}</option>
                   {% endfor %}
                 </select>
               </td>
-              <td class="right"><input type="text" name="target_{{ d.id }}" value="{{ d.target_minutes }}" style="width:80px; text-align:right"></td>
-              <td class="right mono dim">{{ d.target_minutes|minutes }}</td>
+              <td class="center">
+                <input type="checkbox" name="active_{{ d.id }}" value="1" {% if d.active %}checked{% endif %}>
+              </td>
               <td class="right nowrap">{{ d.minutes|minutes }}</td>
-              <td class="right mono">{{ d.questions }}</td>
-              <td class="right">{{ accuracy(d.accuracy) }}</td>
+              <td class="right nowrap dim">{{ d.last_studied|date_br if d.last_studied else '-' }}</td>
             </tr>
           {% endfor %}
         </tbody>
       </table>
     </div>
+
+    <details class="box mt">
+      <summary>Avancado: incidencia, metas e blocos (nao afetam os objetivos do dia)</summary>
+      <div class="tiny dim mt">
+        Campos do ciclo antigo. Continuam gravados e sao usados apenas na tela
+        "Ciclo detalhado". Soma da incidencia: {{ incidence_total|num(2) }}% &middot;
+        soma das metas: {{ total_target|minutes }}.
+      </div>
+      <div class="table-wrap mt">
+        <table>
+          <thead>
+            <tr><th>Disciplina</th><th class="right">Incidencia %</th>
+              <th class="right">Meta/ciclo (min)</th><th>Status</th>
+              <th class="right">Questoes</th><th class="right">Acerto</th></tr>
+          </thead>
+          <tbody>
+            {% for d in disciplines %}
+              <tr>
+                <td>{{ d.name }}</td>
+                <td class="right"><input type="text" name="incidence_{{ d.id }}" value="{{ d.incidence|num(2) }}" style="width:80px; text-align:right"></td>
+                <td class="right"><input type="text" name="target_{{ d.id }}" value="{{ d.target_minutes }}" style="width:80px; text-align:right"></td>
+                <td>
+                  <select name="status_{{ d.id }}" style="width:auto">
+                    {% for key, lbl in statuses.items() %}
+                      <option value="{{ key }}" {% if d.status == key %}selected{% endif %}>{{ lbl }}</option>
+                    {% endfor %}
+                  </select>
+                </td>
+                <td class="right mono">{{ d.questions }}</td>
+                <td class="right">{{ accuracy(d.accuracy) }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </details>
   </form>
 </section>
 
-<section class="card">
+<section class="card flat">
   <details class="box" style="margin:0">
     <summary>Cadastrar nova disciplina</summary>
-    <form method="post" action="{{ url_for('disciplines.create') }}">
-      <div class="form-grid">
+    <form method="post" action="{{ url_for('disciplines.create') }}" class="mt">
+      <div class="form-grid cols-3">
         <div class="field"><label for="name">Nome</label><input type="text" id="name" name="name" required></div>
         <div class="field"><label for="short_name">Sigla</label><input type="text" id="short_name" name="short_name"></div>
-        <div class="field"><label for="incidence">Incidencia %</label><input type="text" id="incidence" name="incidence" value="0"></div>
         <div class="field">
           <label for="priority">Prioridade</label>
           <select id="priority" name="priority">
-            {% for key, label in priorities.items() %}<option value="{{ key }}">{{ label }}</option>{% endfor %}
+            {% for key, lbl in priorities.items() %}<option value="{{ key }}">{{ lbl }}</option>{% endfor %}
           </select>
         </div>
         <div class="field">
-          <label for="status">Status</label>
-          <select id="status" name="status">
-            {% for key, label in statuses.items() %}<option value="{{ key }}">{{ label }}</option>{% endfor %}
+          <label for="frequency">Frequencia</label>
+          <select id="frequency" name="frequency">
+            <option value="0">Padrao da prioridade</option>
+            {% for n, lbl in frequency_labels.items() %}<option value="{{ n }}">{{ n }} &middot; {{ lbl }}</option>{% endfor %}
           </select>
         </div>
-        <div class="field"><label for="block_minutes">Bloco (min)</label><input type="text" id="block_minutes" name="block_minutes" value="60"></div>
-        <div class="field"><label for="target_minutes">Meta/ciclo (min)</label><input type="text" id="target_minutes" name="target_minutes" value="0"></div>
       </div>
       <div class="form-actions"><button class="btn primary" type="submit">Cadastrar</button></div>
     </form>

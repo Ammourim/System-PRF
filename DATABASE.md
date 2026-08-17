@@ -21,20 +21,35 @@ metas do ciclo, tamanhos de bloco, disponibilidade 12x36, intervalos de revisao,
 frequencia de simulado, TAF, faculdade, limiares de desempenho e mix de questoes.
 
 ### `disciplines`
-As 14 disciplinas. `incidence` (% historica), `priority` (`maxima|base|complementar`),
+As 14 disciplinas. `incidence` (% historica), `priority` (`maxima|alta|media|baixa`),
 `status` (`nao_iniciada|em_andamento|revisao|consolidada`), `block_minutes` (tamanho
-padrao do bloco), `target_minutes` (meta por ciclo), `active`, `is_demo`.
+padrao do bloco), `target_minutes` (meta por ciclo), `desired_blocks` (frequencia fixada
+a mao; 0 = calculada pela meta), `min_blocks` (contato minimo garantido por ciclo, mesmo
+com meta 0), `active`, `is_demo`.
+
+`frequency` (migration 004): dias por semana em que a disciplina aparece nos
+**objetivos do dia** (1 a 7; 0 = deduzir da prioridade - maxima 5, alta 3, media 2,
+baixa 1). E o unico campo, junto com `priority` e `active`, que decide o que aparece
+na tela HOJE.
+
+Campos do ciclo detalhado (legado, fora da tela inicial) - divisao de papeis:
+**`priority` define a ORDEM** do ciclo, **`target_minutes` define o
+TEMPO** e `incidence` desempata dentro da mesma prioridade. `desired_blocks` e
+`min_blocks` sao o controle manual - nenhum calculo os sobrescreve.
 Editar peso, prioridade e meta e o caminho para adaptar o sistema ao edital novo.
 
 ### `subjects`
 Assuntos de uma disciplina. `UNIQUE (discipline_id, name)` impede duplicata quando o
 assunto e digitado direto no formulario de registro.
+`status` (`nao_iniciada|em_andamento|concluida`) e `completed_at` (migration 004):
+**a conclusao do assunto e o marco que inicia a revisao espacada**. Registrar estudo
+nunca conclui - so a declaracao explicita do usuario grava `completed_at`.
 
-### `study_cycles`
+### `study_cycles` (legado - tela "Ciclo detalhado")
 Um ciclo. `number`, `start_date`, `end_date`, `days`, `goal_minutes`, `goal_questions`,
 `current_position` (**a posicao atual no ciclo**) e `status` (`ativo|encerrado`).
 
-### `cycle_blocks`
+### `cycle_blocks` (legado - tela "Ciclo detalhado")
 Os blocos ordenados do ciclo: `position`, `discipline_id`, `subject_id` (opcional),
 `planned_minutes`, `block_size` (`longo|medio|curto|custom`), `focus`, `done`, `done_at`.
 Indice `(cycle_id, position)`.
@@ -56,9 +71,12 @@ Caderno de erros. `category` (`C|E|I|A|D|CH`), `explanation`, `needs_review`,
 
 ### `reviews`
 Fila de revisao espacada. `origin_date`, `next_date`, `step` (indice na lista de
-intervalos), `interval_days`, `difficulty`, `method`
+intervalos), `interval_days`, `difficulty` (legado: nao afeta mais nenhum calculo), `method`
 (`questoes|flashcards|recuperacao_ativa|releitura|caderno_erros|mista`),
-`status` (`pendente|concluida|arquivada`), `last_done_at`, `times_done`.
+`status` (`pendente|concluida|arquivada`; `concluida` = percorreu a sequencia inteira,
+assunto consolidado), `last_done_at`, `times_done`.
+Regra: proxima data = `last_done_at` real + proximo intervalo. Atraso nunca duplica
+linha, e a sequencia termina no ultimo intervalo da lista.
 Indice `(status, next_date)` - e a consulta mais frequente do sistema.
 
 ### `mock_exams` e `mock_exam_results`

@@ -15,73 +15,360 @@ from . import settings as settings_service
 
 
 # --------------------------------------------------------------------------
+# Prioridade
+# --------------------------------------------------------------------------
+# Vocabulario unico do sistema. A ordem deste dicionario E a ordem do ciclo.
+PRIORITIES: dict[str, str] = {
+    "maxima": "Maxima",
+    "alta": "Alta",
+    "media": "Media",
+    "baixa": "Baixa",
+}
+
+PRIORITY_ORDER: dict[str, int] = {key: i for i, key in enumerate(PRIORITIES)}
+
+DEFAULT_PRIORITY = "alta"
+
+
+def priority_rank(value) -> int:
+    """Posicao da prioridade na fila (0 = mais cedo no ciclo)."""
+    return PRIORITY_ORDER.get(str(value or DEFAULT_PRIORITY), PRIORITY_ORDER[DEFAULT_PRIORITY])
+
+
+# --------------------------------------------------------------------------
+# Quantidade e tamanho dos blocos
+# --------------------------------------------------------------------------
+MINUTE_STEP = 5
+
+
+def split_minutes(total: int, parts: int, step: int = MINUTE_STEP) -> list[int]:
+    """Divide `total` minutos em `parts` blocos, em multiplos de `step`.
+
+    Garantia: a soma dos blocos e EXATAMENTE `total`. Nenhum minuto e perdido nem
+    inventado - o que sobra da divisao vai para os primeiros blocos.
+    """
+    total = max(0, int(total))
+    parts = int(parts)
+    if parts <= 0:
+        return []
+    if parts == 1:
+        return [total]
+
+    base = (total // parts // step) * step
+    values = [base] * parts
+    rest = total - base * parts
+    index = 0
+    while rest >= step:
+        values[index % parts] += step
+        rest -= step
+        index += 1
+    if rest:
+        values[0] += rest
+    return values
+
+
+def blocks_for_target(target_minutes: int, block_minutes: int,
+                      min_block_minutes: int = 30, desired_blocks: int = 0,
+                      min_blocks: int = 0) -> list[int]:
+    """Minutos de cada bloco de uma disciplina. Sem `round()` silencioso.
+
+    A auditoria mostrou que `round(target / block)` distorcia a meta em ate +-33%
+    sem avisar (meta 120 com bloco 90 virava 90 min; meta 90 com bloco 60 virava
+    120 min). A estrategia aqui e outra:
+
+      1. controle manual vence: `desired_blocks > 0` fixa a quantidade;
+      2. senao, usa o teto de `meta / bloco` - assim o bloco nunca fica MAIOR
+         que o tamanho preferido pelo usuario;
+      3. se isso deixar blocos abaixo de `min_block_minutes`, cai para o piso;
+      4. a meta e distribuida entre os blocos escolhidos (multiplos de 5 min),
+         somando exatamente a meta.
+
+    Resultado: o erro entre meta e tempo planejado e zero na grande maioria dos
+    casos, e quando nao e, `generate_cycle_plan` mostra a diferenca na tela.
+    """
+    target = max(0, int(target_minutes or 0))
+    block = max(MINUTE_STEP, int(block_minutes or 60))
+    floor_minutes = max(MINUTE_STEP, int(min_block_minutes or MINUTE_STEP))
+    desired = max(0, int(desired_blocks or 0))
+    minimum = max(0, int(min_blocks or 0))
+
+    if desired:
+        if target <= 0:
+            return [block] * desired
+        return split_minutes(target, min(desired, max(1, target // MINUTE_STEP)))
+
+    if target <= 0:
+        # Sem meta: entra no ciclo apenas se o usuario pediu contato minimo.
+        return [block] * minimum
+
+    count = -(-target // block)                     # teto da divisao
+    if count > 1 and target / count < floor_minutes:
+        count = max(1, target // block)             # piso: blocos curtos demais
+    count = max(count, minimum, 1)
+    count = min(count, max(1, target // MINUTE_STEP))
+    return split_minutes(target, count)
+
+
+# --------------------------------------------------------------------------
 # Distribuicao dos blocos
 # --------------------------------------------------------------------------
 def spread(items: list[dict]) -> list[dict]:
-    """Intercala os blocos para que uma disciplina nao caia toda em sequencia.
+    """Ordena os blocos do ciclo. A PRIORIDADE manda; o resto so desempata.
 
-    Cada item e um dict com pelo menos {'discipline_id', 'count', ...}. Para uma
-    disciplina com k blocos, o i-esimo bloco recebe a chave (i + 0.5) / k, o que
-    espalha os blocos uniformemente pelo ciclo. Empates sao resolvidos pela
-    disciplina com mais blocos (aparece antes), depois pela ordem informada.
+    O ciclo e montado em rodadas. Numa rodada, cada disciplina entra no maximo
+    uma vez, na ordem: prioridade (maxima > alta > media > baixa), depois
+    incidencia historica, depois a ordem recebida. Uma disciplina com k blocos
+    entra na rodada `i * rodadas // k`, o que espalha os blocos pelo ciclo sem
+    furar a fila de prioridade.
 
-    Como varios empates podem juntar dois blocos da mesma disciplina, um segundo
-    passo desfaz repeticoes vizinhas (ver `_separate_neighbours`).
+    Assim uma disciplina de prioridade baixa nunca aparece cedo apenas porque tem
+    mais blocos - o problema descrito na secao 5.2 da auditoria.
+
+    Aceita `block_list` (minutos de cada bloco) ou o formato antigo
+    `count` + `block_minutes`.
     """
-    entries: list[tuple[float, int, int, dict]] = []
+    prepared: list[tuple[int, dict, list[int]]] = []
     for order, item in enumerate(items):
-        count = int(item.get("count", 0))
-        if count <= 0:
+        minutes_list = [int(m) for m in (item.get("block_list") or [])]
+        if not minutes_list:
+            count = int(item.get("count", 0) or 0)
+            minutes_list = [int(item.get("block_minutes", 60) or 60)] * max(0, count)
+        if not minutes_list:
             continue
-        for i in range(count):
-            key = (i + 0.5) / count
-            entries.append((key, -count, order, item))
-    entries.sort(key=lambda e: (e[0], e[1], e[2]))
-    return _separate_neighbours([e[3] for e in entries])
+        prepared.append((order, item, minutes_list))
+
+    if not prepared:
+        return []
+
+    rounds = max(len(minutes) for _, _, minutes in prepared)
+    entries: list[tuple[int, int, float, int, int, dict]] = []
+    for order, item, minutes_list in prepared:
+        total = len(minutes_list)
+        rank = priority_rank(item.get("priority"))
+        incidence = float(item.get("incidence") or 0)
+        for index, minutes in enumerate(minutes_list):
+            block = dict(item)
+            block.pop("block_list", None)
+            block["block_minutes"] = int(minutes)
+            entries.append((index * rounds // total, rank, -incidence, order, index, block))
+
+    entries.sort(key=lambda e: e[:5])
+    return _separate_neighbours([e[5] for e in entries])
+
+
+def _rank(block: dict) -> int:
+    return priority_rank(block.get("priority"))
+
+
+def _try_swap(ordered: list[dict], i: int) -> bool:
+    """Troca ordered[i] por um bloco adiante, sem criar uma nova repeticao.
+
+    Somente entre blocos de MESMA prioridade: desfazer uma repeticao nunca pode
+    custar a ordem de prioridade do ciclo.
+    """
+    for j in range(i + 1, len(ordered)):
+        if _rank(ordered[j]) != _rank(ordered[i]):
+            continue
+        if ordered[j]["discipline_id"] == ordered[i - 1]["discipline_id"]:
+            continue
+        before_ok = ordered[j - 1]["discipline_id"] != ordered[i]["discipline_id"] or j == i + 1
+        after_ok = (j + 1 >= len(ordered)
+                    or ordered[j + 1]["discipline_id"] != ordered[i]["discipline_id"])
+        if before_ok and after_ok:
+            ordered[i], ordered[j] = ordered[j], ordered[i]
+            return True
+    return False
+
+
+def _try_move(ordered: list[dict], i: int) -> bool:
+    """Ultimo recurso: reinsere o bloco na primeira posicao sem vizinho igual.
+
+    A posicao tem de continuar dentro da faixa da prioridade do bloco - ele nunca
+    passa na frente de uma disciplina mais prioritaria para fugir da repeticao.
+    """
+    block = ordered.pop(i)
+    discipline_id = block["discipline_id"]
+    rank = _rank(block)
+    for position in range(len(ordered) + 1):
+        if position and _rank(ordered[position - 1]) > rank:
+            continue
+        if position < len(ordered) and _rank(ordered[position]) < rank:
+            continue
+        before_ok = position == 0 or ordered[position - 1]["discipline_id"] != discipline_id
+        after_ok = position == len(ordered) or ordered[position]["discipline_id"] != discipline_id
+        if before_ok and after_ok:
+            ordered.insert(position, block)
+            return True
+    ordered.insert(i, block)
+    return False
 
 
 def _separate_neighbours(ordered: list[dict]) -> list[dict]:
-    """Evita dois blocos seguidos da mesma disciplina, trocando com o vizinho util.
+    """Evita dois blocos seguidos da mesma disciplina.
 
-    Se uma disciplina tem mais da metade dos blocos, a repeticao e inevitavel -
-    nesse caso a funcao reduz o que da e segue em frente, sem travar.
+    Tenta primeiro uma troca simples; se nao houver troca possivel, reinsere o
+    bloco em outra posicao. Se uma disciplina tem mais da metade dos blocos a
+    repeticao e inevitavel - nesse caso a funcao reduz o que da e segue em
+    frente, sem travar e sem perder blocos.
     """
-    for i in range(1, len(ordered)):
-        if ordered[i]["discipline_id"] != ordered[i - 1]["discipline_id"]:
-            continue
-        for j in range(i + 1, len(ordered)):
-            candidate = ordered[j]
-            if candidate["discipline_id"] == ordered[i - 1]["discipline_id"]:
+    for _ in range(3):
+        conflicts = [i for i in range(1, len(ordered))
+                     if ordered[i]["discipline_id"] == ordered[i - 1]["discipline_id"]]
+        if not conflicts:
+            break
+        for i in conflicts:
+            if i >= len(ordered):
                 continue
-            # Nao criar uma nova repeticao no lugar de onde o candidato saiu.
-            before_ok = ordered[j - 1]["discipline_id"] != ordered[i]["discipline_id"] or j == i + 1
-            after_ok = (j + 1 >= len(ordered)
-                        or ordered[j + 1]["discipline_id"] != ordered[i]["discipline_id"])
-            if before_ok and after_ok:
-                ordered[i], ordered[j] = ordered[j], ordered[i]
-                break
+            if ordered[i]["discipline_id"] != ordered[i - 1]["discipline_id"]:
+                continue
+            if not _try_swap(ordered, i):
+                _try_move(ordered, i)
     return ordered
 
 
-def plan_from_disciplines(rows) -> list[dict]:
-    """Monta o plano padrao a partir das metas cadastradas nas disciplinas."""
-    plan = []
-    for row in rows:
-        target = int(row["target_minutes"] or 0)
-        block = int(row["block_minutes"] or 60) or 60
-        if target <= 0:
-            continue
-        count = max(1, int(target / block + 0.5))
-        plan.append(
-            {
-                "discipline_id": row["id"],
-                "name": row["name"],
-                "block_minutes": block,
-                "target_minutes": target,
-                "count": count,
-            }
-        )
-    return plan
+# --------------------------------------------------------------------------
+# Planejamento do ciclo (funcao unica e auditavel)
+# --------------------------------------------------------------------------
+def block_config(conn=None) -> dict:
+    """Parametros de bloco/meta vindos de Configuracoes."""
+    return {
+        "min_block_minutes": settings_service.get_int("cycle_min_block_minutes", 30, conn),
+        "tolerance_pct": settings_service.get_float("cycle_goal_tolerance_pct", 5.0, conn),
+        "goal_minutes": settings_service.get_int("prf_goal_minutes", 1800, conn),
+    }
+
+
+def _row_value(row, key, default=None):
+    try:
+        value = row[key]
+    except (KeyError, IndexError, TypeError):
+        return default
+    return default if value is None else value
+
+
+def generate_cycle_plan(disciplines, goal_minutes: int | None = None,
+                        config: dict | None = None) -> dict:
+    """Transforma as disciplinas cadastradas no plano do ciclo, de forma auditavel.
+
+    Passos (na ordem, todos visiveis no resultado):
+      1. filtra disciplinas ativas;
+      2. le prioridade, meta, bloco, frequencia desejada e contato minimo;
+      3. calcula a quantidade e o tamanho dos blocos minimizando o erro contra a
+         meta de cada disciplina (`blocks_for_target`);
+      4. monta a sequencia respeitando a prioridade (`spread`);
+      5. compara o total planejado com a meta do ciclo e devolve os avisos.
+
+    NUNCA reescreve a decisao manual: nem prioridade, nem meta, nem frequencia.
+    Divergencia contra a meta e reportada, nao corrigida por conta propria.
+    """
+    cfg = dict(config or {})
+    min_block = int(cfg.get("min_block_minutes", 30))
+    tolerance_pct = float(cfg.get("tolerance_pct", 5.0))
+    goal = int(goal_minutes if goal_minutes is not None
+               else cfg.get("goal_minutes", 1800))
+
+    items: list[dict] = []
+    plan: list[dict] = []
+    for row in disciplines:
+        active = int(_row_value(row, "active", 1) or 0)
+        target = int(_row_value(row, "target_minutes", 0) or 0)
+        block = max(MINUTE_STEP, int(_row_value(row, "block_minutes", 60) or 60))
+        desired = int(_row_value(row, "desired_blocks", 0) or 0)
+        minimum = int(_row_value(row, "min_blocks", 0) or 0)
+        priority = str(_row_value(row, "priority", DEFAULT_PRIORITY) or DEFAULT_PRIORITY)
+
+        block_list = [] if not active else blocks_for_target(
+            target, block, min_block_minutes=min_block,
+            desired_blocks=desired, min_blocks=minimum)
+        planned = sum(block_list)
+
+        if not active:
+            note = "Disciplina inativa - fora do ciclo (continua cadastrada)."
+        elif not block_list:
+            note = "Meta 0 e sem contato minimo - fora deste ciclo."
+        elif desired:
+            note = f"Frequencia fixada manualmente em {desired} bloco(s)."
+        elif target <= 0 and minimum:
+            note = f"Contato minimo de {minimum} bloco(s), sem meta declarada."
+        elif planned == target:
+            note = "Meta atendida exatamente."
+        else:
+            note = f"Meta ajustada em {planned - target:+d} min pelo tamanho do bloco."
+
+        item = {
+            "discipline_id": _row_value(row, "id"),
+            "name": _row_value(row, "name", ""),
+            "short_name": _row_value(row, "short_name", ""),
+            "priority": priority,
+            "priority_rank": priority_rank(priority),
+            "priority_label": PRIORITIES.get(priority, priority),
+            "status": _row_value(row, "status", ""),
+            "incidence": float(_row_value(row, "incidence", 0) or 0),
+            "target_minutes": target,
+            "block_minutes": block,
+            "desired_blocks": desired,
+            "min_blocks": minimum,
+            "active": bool(active),
+            "blocks": len(block_list),
+            "block_list": block_list,
+            "planned_minutes": planned,
+            "diff": planned - target,
+            "included": bool(block_list),
+            "note": note,
+        }
+        items.append(item)
+        if block_list:
+            plan.append(dict(item, count=len(block_list)))
+
+    items.sort(key=lambda i: (i["priority_rank"], -i["incidence"], i["name"]))
+    plan.sort(key=lambda i: (i["priority_rank"], -i["incidence"], i["name"]))
+
+    sequence = spread(plan)
+    total_minutes = sum(int(b["block_minutes"]) for b in sequence)
+    diff = total_minutes - goal
+    tolerance = int(round(goal * tolerance_pct / 100))
+
+    warnings: list[str] = []
+    if not sequence:
+        warnings.append("Nenhuma disciplina com meta ou contato minimo - ciclo vazio.")
+    if goal and abs(diff) > tolerance:
+        warnings.append(
+            f"Total planejado {_hhmm(total_minutes)} contra meta de {_hhmm(goal)}"
+            f" ({diff:+d} min). Tolerancia de {tolerance_pct:g}% = +-{tolerance} min.")
+    adjusted = [i for i in items if i["included"] and i["diff"]]
+    if adjusted:
+        warnings.append(
+            "Disciplinas com tempo planejado diferente da meta: "
+            + ", ".join(f"{i['short_name'] or i['name']} ({i['diff']:+d} min)"
+                        for i in adjusted) + ".")
+
+    return {
+        "items": items,
+        "adjusted": adjusted,
+        "plan": plan,
+        "sequence": sequence,
+        "total_blocks": len(sequence),
+        "total_minutes": total_minutes,
+        "goal_minutes": goal,
+        "diff": diff,
+        "tolerance_pct": tolerance_pct,
+        "tolerance_minutes": tolerance,
+        "within_tolerance": bool(goal) and abs(diff) <= tolerance,
+        "warnings": warnings,
+    }
+
+
+def _hhmm(minutes: int) -> str:
+    minutes = int(minutes or 0)
+    return f"{minutes // 60}h{minutes % 60:02d}"
+
+
+def plan_from_disciplines(rows, config: dict | None = None) -> list[dict]:
+    """Plano pronto para `spread()`/`rebuild_blocks()` a partir das disciplinas.
+
+    Atalho de `generate_cycle_plan` para quem so quer os blocos (seed, scripts).
+    """
+    return generate_cycle_plan(rows, config=config)["plan"]
 
 
 # --------------------------------------------------------------------------

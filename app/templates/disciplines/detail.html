@@ -37,6 +37,12 @@
         <input type="text" id="block_minutes" name="block_minutes" value="{{ discipline.block_minutes }}"></div>
       <div class="field"><label for="target_minutes">Meta por ciclo (min)</label>
         <input type="text" id="target_minutes" name="target_minutes" value="{{ discipline.target_minutes }}"></div>
+      <div class="field"><label for="desired_blocks">Frequencia fixa (blocos)</label>
+        <input type="number" id="desired_blocks" name="desired_blocks" min="0" value="{{ discipline.desired_blocks }}">
+        <div class="tiny dim">0 = o sistema calcula pela meta. Outro valor manda no calculo.</div></div>
+      <div class="field"><label for="min_blocks">Contato minimo (blocos)</label>
+        <input type="number" id="min_blocks" name="min_blocks" min="0" value="{{ discipline.min_blocks }}">
+        <div class="tiny dim">Garante presenca no ciclo mesmo com meta 0.</div></div>
       <div class="field span-full"><label for="notes">Anotacoes</label>
         <textarea id="notes" name="notes">{{ discipline.notes }}</textarea></div>
     </div>
@@ -75,7 +81,7 @@
                     <div class="field">
                       <label>Status</label>
                       <select name="status">
-                        {% for key, label in statuses.items() %}
+                        {% for key, label in subject_statuses.items() %}
                           <option value="{{ key }}" {% if s.status == key %}selected{% endif %}>{{ label }}</option>
                         {% endfor %}
                       </select>
@@ -108,7 +114,7 @@
       <div class="field">
         <label for="subject_status">Status inicial</label>
         <select id="subject_status" name="status">
-          {% for key, label in statuses.items() %}<option value="{{ key }}">{{ label }}</option>{% endfor %}
+          {% for key, label in subject_statuses.items() %}<option value="{{ key }}">{{ label }}</option>{% endfor %}
         </select>
       </div>
       <div class="form-actions"><button class="btn primary" type="submit">Cadastrar</button></div>

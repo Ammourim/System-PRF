@@ -204,14 +204,18 @@ def test_ajuste_do_ciclo_so_muda_apos_aceite(client, app):
 
 def test_montar_ciclo_gera_blocos(client, app):
     with app.app_context():
-        disciplines = query_all("SELECT id FROM disciplines ORDER BY id LIMIT 3")
-        ids = [d["id"] for d in disciplines]
+        all_ids = [d["id"] for d in query_all("SELECT id FROM disciplines ORDER BY id")]
+    ids = all_ids[:3]
 
     data = {"name": "Ciclo teste", "start_date": today_iso(), "days": "14",
             "goal_minutes": "1800", "goal_questions": "350"}
-    for did in ids:
-        data[f"target_{did}"] = "180"
+    # O formulario e a fonte da verdade: envia todas as linhas, as demais com meta 0.
+    for did in all_ids:
+        data[f"row_{did}"] = "1"
+        data[f"active_{did}"] = "1"
+        data[f"target_{did}"] = "180" if did in ids else "0"
         data[f"block_{did}"] = "60"
+        data[f"min_{did}"] = "0"
     response = client.post("/ciclo/montar", data=data, follow_redirects=True)
     assert response.status_code == 200
 

@@ -25,21 +25,60 @@ def test_concluir_avanca_para_o_proximo_intervalo(ctx):
     assert row["next_date"] == add_days(today_iso(), 7)
 
 
-def test_dificuldade_encurta_ou_alonga(ctx):
+def test_nada_altera_o_intervalo_da_lista(ctx):
+    """Sem algoritmo: o intervalo e o da lista, aconteca o que acontecer."""
     facil = reviews_service.create_review(discipline_id=1)
     dificil = reviews_service.create_review(discipline_id=1)
     r_facil = reviews_service.complete_review(facil, difficulty="facil")
     r_dificil = reviews_service.complete_review(dificil, difficulty="dificil")
-    assert r_facil["interval_days"] == round(7 * 1.5)
-    assert r_dificil["interval_days"] == round(7 * 0.6)
+    assert r_facil["interval_days"] == 7
+    assert r_dificil["interval_days"] == 7
 
 
-def test_intervalo_repete_o_maior_apos_o_fim_da_lista(ctx):
+def test_proxima_data_sai_da_conclusao_real_nao_da_prevista(ctx):
+    """Revisao atrasada: conta a partir do dia em que voce realmente fez."""
     review_id = reviews_service.create_review(discipline_id=1)
-    for _ in range(8):
-        reviews_service.complete_review(review_id, difficulty="media")
-    row = query_one("SELECT interval_days FROM reviews WHERE id = ?", (review_id,))
-    assert row["interval_days"] == 60
+    ctx.execute("UPDATE reviews SET next_date = ? WHERE id = ?",
+                (add_days(today_iso(), -5), review_id))
+    ctx.commit()
+
+    feito_em = add_days(today_iso(), -2)
+    result = reviews_service.complete_review(review_id, done_date=feito_em)
+    assert result["next_date"] == add_days(feito_em, 7)
+    assert query_one("SELECT COUNT(*) AS n FROM reviews", ())["n"] == 1  # nada duplicado
+
+
+def test_sequencia_termina_no_ultimo_intervalo(ctx):
+    """D1, D7, D15, D30, D60 e acabou - o sistema nao inventa revisao infinita."""
+    review_id = reviews_service.create_review(discipline_id=1)
+    for esperado in [7, 15, 30, 60]:
+        assert reviews_service.complete_review(review_id)["interval_days"] == esperado
+
+    final = reviews_service.complete_review(review_id)
+    assert final["finished"] is True
+    row = query_one("SELECT * FROM reviews WHERE id = ?", (review_id,))
+    assert row["status"] == "concluida"
+    assert row["times_done"] == 5
+    assert reviews_service.counts()["due"] == 0
+
+
+def test_concluir_assunto_nao_duplica_a_fila(ctx):
+    subject_id = ctx.execute(
+        "INSERT INTO subjects (discipline_id, name, status) VALUES (1, 'Infracoes', 'concluida')"
+    ).lastrowid
+    ctx.commit()
+    primeiro = reviews_service.create_for_subject(1, subject_id, title="Infracoes")
+    segundo = reviews_service.create_for_subject(1, subject_id, title="Infracoes")
+    assert primeiro is not None
+    assert segundo is None
+    assert query_one("SELECT COUNT(*) AS n FROM reviews", ())["n"] == 1
+
+
+def test_rotulo_da_revisao_e_o_intervalo(ctx):
+    review_id = reviews_service.create_review(discipline_id=1)
+    assert reviews_service.get(review_id)["label"] == "D1"
+    reviews_service.complete_review(review_id)
+    assert reviews_service.get(review_id)["label"] == "D7"
 
 
 def test_intervalos_configuraveis(ctx):

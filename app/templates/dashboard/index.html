@@ -1,392 +1,135 @@
 {% extends "base.html" %}
-{% from "partials/_macros.html" import accuracy, delta, discipline_select, subject_fields, progress_bar %}
 
-{% block title %}Painel - Sistema PRF{% endblock %}
-{% block heading %}Painel{% endblock %}
-{% block subtitle %}<div class="subtitle">{{ today|date_br }}{% if cycle %} &middot; {{ cycle.name }} ({{ cycle.start_date|date_br }} a {{ cycle.end_date|date_br }}){% endif %}</div>{% endblock %}
-
-{% block topbar_actions %}
-  <a class="btn" href="{{ url_for('sessions.new') }}">Registrar sessao</a>
-  <a class="btn" href="{{ url_for('reviews.index') }}">Revisoes</a>
-{% endblock %}
+{% block title %}Hoje - Sistema PRF{% endblock %}
+{% block heading %}Hoje{% endblock %}
+{% block subtitle %}<div class="subtitle">{{ today|date_br }}</div>{% endblock %}
 
 {% block content %}
-<div class="grid dash">
-  <div>
-    {# ------------------------------------------------------ PROXIMO BLOCO #}
-    {% if block %}
-      <section class="next-block">
-        <div class="eyebrow">Proximo bloco &middot; posicao {{ progress.position }} de {{ progress.total_blocks }}</div>
-        <div class="title">
-          {{ block.discipline_name }}{% if block.subject_name %} <span class="muted">- {{ block.subject_name }}</span>{% endif %}
-        </div>
-        <div class="meta">
-          {{ block.planned_minutes }} minutos ({{ block.block_size }}){% if block.focus %} &middot; {{ block.focus }}{% endif %}
-        </div>
-        <div class="row">
-          <a class="btn primary big" href="#registrar">Iniciar</a>
-          <form method="post" action="{{ url_for('cycles.advance') }}" class="inline-form">
-            <input type="hidden" name="block_id" value="{{ block.id }}">
-            <input type="hidden" name="mark_done" value="0">
-            <button class="btn" type="submit">Pular sem marcar</button>
-          </form>
-          <a class="btn ghost" href="{{ url_for('cycles.index') }}">Ver ciclo</a>
-        </div>
-      </section>
-    {% elif cycle %}
-      <section class="next-block">
-        <div class="eyebrow">Ciclo concluido</div>
-        <div class="title">Todos os blocos foram percorridos</div>
-        <div class="meta">Gere o relatorio do ciclo e monte o proximo quando quiser.</div>
-        <div class="row">
-          <a class="btn primary" href="{{ url_for('cycles.report', cycle_id=cycle.id) }}">Ver relatorio do ciclo</a>
-          <a class="btn" href="{{ url_for('cycles.build') }}">Montar proximo ciclo</a>
-        </div>
-      </section>
-    {% else %}
-      <section class="next-block">
-        <div class="eyebrow">Nenhum ciclo ativo</div>
-        <div class="title">Monte seu primeiro ciclo</div>
-        <div class="meta">Defina quanto tempo quer dar a cada disciplina nos proximos 14 dias.</div>
-        <a class="btn primary" href="{{ url_for('cycles.build') }}">Montar ciclo</a>
-      </section>
+
+{# ====================================================== REVISOES DE HOJE #}
+<section class="card hoje {{ 'alerta' if review_counts.late else '' }}">
+  <div class="card-head">
+    <div class="card-title big">&#128276; Revisoes de hoje</div>
+    <div class="spacer"></div>
+    {% if review_counts.due %}
+      <span class="badge {{ 'bad' if review_counts.late else 'accent' }}">
+        {{ review_counts.due }} para hoje{% if review_counts.late %} &middot; {{ review_counts.late }} atrasada(s){% endif %}
+      </span>
     {% endif %}
-
-    {# ---------------------------------------------------- AVISO SIMULADO #}
-    {% if mock_status.is_due %}
-      <section class="card">
-        <div class="card-head">
-          <div class="card-title">Simulado recomendado</div>
-          <div class="spacer"></div>
-          <span class="badge warn">{{ mock_status.frequency_label|lower }}</span>
-        </div>
-        <div class="row">
-          <div class="grow">
-            {% if mock_status.state == 'primeiro' %}
-              <div class="strong">Voce ainda nao registrou nenhum simulado.</div>
-              <div class="sub muted small">
-                Um simulado completo mede o que questao solta nao mede: gestao de tempo e
-                resistencia. Reserve tambem tempo para corrigir e analisar.
-              </div>
-            {% else %}
-              <div class="strong">
-                Faz {{ mock_status.days_since }} dias desde o ultimo
-                ({{ mock_status.last.name }}, {{ mock_status.last.date|date_br }}).
-              </div>
-              <div class="sub muted small">
-                {% if mock_status.days_left < 0 %}
-                  Venceu ha {{ -mock_status.days_left }} dia(s) pela frequencia configurada.
-                {% else %}
-                  Vence hoje pela frequencia configurada.
-                {% endif %}
-                Nao e obrigacao - se hoje nao cabe, adie o aviso.
-              </div>
-            {% endif %}
-          </div>
-        </div>
-        <div class="row mt">
-          <a class="btn primary" href="{{ url_for('mocks.timer') }}">Fazer agora (modo prova real)</a>
-          <a class="btn" href="{{ url_for('mocks.index') }}">Registrar um ja feito</a>
-          <form method="post" action="{{ url_for('mocks.snooze') }}" class="inline-form">
-            <input type="hidden" name="next" value="{{ url_for('dashboard.index') }}">
-            <input type="hidden" name="days" value="3">
-            <button class="btn ghost" type="submit">Adiar 3 dias</button>
-          </form>
-          <form method="post" action="{{ url_for('mocks.snooze') }}" class="inline-form">
-            <input type="hidden" name="next" value="{{ url_for('dashboard.index') }}">
-            <input type="hidden" name="days" value="7">
-            <button class="btn ghost" type="submit">Adiar 7 dias</button>
-          </form>
-        </div>
-        <div class="tiny dim mt">
-          O ciclo nao muda por causa disso: nenhum bloco foi criado nem adiado.
-        </div>
-      </section>
-    {% endif %}
-
-    {# --------------------------------------------------- REGISTRO RAPIDO #}
-    <section class="card accent" id="registrar">
-      <div class="card-head">
-        <div class="card-title">Registrar estudo</div>
-        <div class="spacer"></div>
-        <span class="tiny dim">Preencha o tempo, o resto e opcional</span>
-      </div>
-      <form method="post" action="{{ url_for('sessions.save') }}">
-        <input type="hidden" name="next" value="{{ url_for('dashboard.index') }}">
-        {% if block %}
-          <input type="hidden" name="block_id" value="{{ block.id }}">
-          <input type="hidden" name="planned_minutes" value="{{ block.planned_minutes }}">
-        {% endif %}
-        <div class="form-grid">
-          <div class="field">
-            <label for="date">Data</label>
-            <input type="date" id="date" name="date" value="{{ today }}">
-          </div>
-          {{ discipline_select(disciplines, block.discipline_id if block else None, target='dash-subject', required=true) }}
-          {{ subject_fields(selected=block.subject_id if block else None, target='dash-subject') }}
-          <div class="field">
-            <label for="type">Tipo</label>
-            <select id="type" name="type">
-              {% for key, label in session_types.items() %}
-                <option value="{{ key }}" {% if key == 'questoes' %}selected{% endif %}>{{ label }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div class="field">
-            <label for="actual_minutes">Tempo realizado (min)</label>
-            <input type="text" id="actual_minutes" name="actual_minutes" inputmode="numeric"
-                   placeholder="{{ block.planned_minutes if block else 60 }}" required>
-          </div>
-          <div class="field">
-            <label for="questions_total">Questoes</label>
-            <input type="number" id="questions_total" name="questions_total" min="0" placeholder="0">
-          </div>
-          <div class="field">
-            <label for="questions_correct">Acertos</label>
-            <input type="number" id="questions_correct" name="questions_correct" min="0" placeholder="0">
-          </div>
-          <div class="field span-full">
-            <label for="notes">Observacao</label>
-            <input type="text" id="notes" name="notes" placeholder="Ex.: confundi penalidade com medida administrativa">
-          </div>
-        </div>
-        <div class="form-actions">
-          <button class="btn primary" type="submit">Salvar</button>
-          <label class="check"><input type="checkbox" name="advance_cycle" value="1" {% if block %}checked{% endif %}> Concluir bloco e avancar o ciclo</label>
-          <label class="check"><input type="checkbox" name="create_review" value="1"> Agendar revisao deste assunto</label>
-        </div>
-      </form>
-    </section>
-
-    {# ------------------------------------------------------------ REVISOES #}
-    <section class="card">
-      <div class="card-head">
-        <div class="card-title">Revisoes de hoje</div>
-        <div class="spacer"></div>
-        <span class="badge {{ 'bad' if review_counts.late else 'accent' }}">{{ review_counts.due }} na fila</span>
-        <a class="btn sm" href="{{ url_for('reviews.index') }}">Abrir fila</a>
-      </div>
-      {% if due_reviews %}
-        <div class="list">
-          {% for review in due_reviews %}
-            <div class="list-item">
-              <span class="dot {{ 'bad' if review.urgency == 'atrasada' else ('warn' if review.urgency == 'hoje' else 'good') }}"></span>
-              <div class="grow">
-                <div class="name">{{ review.short_name }} - {{ review.subject_name or review.title or 'Revisao' }}</div>
-                <div class="sub">
-                  {{ review.next_date|date_br }}
-                  {% if review.urgency == 'atrasada' %}(atrasada){% endif %}
-                  &middot; {{ review.method|replace('_', ' ') }}
-                  &middot; {% if review.times_done %}ja revisado {{ review.times_done }}x{% else %}primeira revisao{% endif %}
-                </div>
-              </div>
-              <form method="post" action="{{ url_for('reviews.complete', review_id=review.id) }}" class="inline-form">
-                <input type="hidden" name="next" value="{{ url_for('dashboard.index') }}">
-                <button class="btn sm" type="submit">Concluir</button>
-              </form>
-            </div>
-          {% endfor %}
-        </div>
-      {% else %}
-        <div class="empty">Nenhuma revisao vencida. Nada acumulado.</div>
-      {% endif %}
-    </section>
+    <a class="btn sm ghost" href="{{ url_for('reviews.index') }}">Ver todas</a>
   </div>
 
-  {# ============================================================ COLUNA 2 #}
-  <div>
-    {# ---------------------------------------------------------------- HOJE #}
-    <section class="card">
-      <div class="card-head"><div class="card-title">Hoje</div></div>
-      <div class="list">
+  {% if due_reviews %}
+    <div class="list">
+      {% for r in due_reviews %}
         <div class="list-item">
-          <div class="grow"><div class="name">PRF</div></div>
-          <div class="strong">{{ today_summary.prf_minutes|minutes }}</div>
-        </div>
-        <div class="list-item">
+          <span class="dot {{ 'bad' if r.urgency == 'atrasada' else 'warn' }}"></span>
           <div class="grow">
-            <div class="name">Questoes</div>
-            <div class="sub">{{ today_summary.accuracy|pct(0) if today_summary.accuracy is not none else 'sem registro' }}</div>
-          </div>
-          <div class="strong">{{ today_summary.questions }} / {{ today_summary.questions_goal }}</div>
-        </div>
-        <div class="list-item">
-          <div class="grow"><div class="name">Revisoes</div></div>
-          <div class="strong">{{ review_counts.due }}</div>
-        </div>
-        <div class="list-item">
-          <div class="grow"><div class="name">Faculdade</div></div>
-          <div class="strong">{{ today_summary.college_minutes|minutes }}</div>
-        </div>
-        <div class="list-item">
-          <div class="grow">
-            <div class="name">Simulado</div>
+            <div class="name big">{{ r.short_name }} &mdash; {{ r.subject_name or r.title or 'Revisao' }}</div>
             <div class="sub">
-              {% if mock_status.state == 'manual' %}aviso desligado
-              {% elif mock_status.state == 'primeiro' %}nenhum registrado
-              {% elif mock_status.state == 'adiado' %}adiado ate {{ mock_status.snoozed_until|date_br }}
-              {% else %}ultimo em {{ mock_status.last.date|date_br }}{% endif %}
+              <span class="badge">{{ r.label }}</span>
+              {% if r.urgency == 'atrasada' %}
+                <span class="text-bad strong">Atrasada ha {{ r.late_days }} dia(s)</span>
+              {% else %}
+                <span class="text-warn strong">Vence hoje</span>
+              {% endif %}
             </div>
           </div>
-          <div class="strong small nowrap">
-            {% if mock_status.state == 'vencido' %}<span class="text-warn">vencido</span>
-            {% elif mock_status.state == 'hoje' %}<span class="text-warn">hoje</span>
-            {% elif mock_status.state == 'agendado' %}em {{ mock_status.days_left }}d
-            {% else %}<span class="dim">-</span>{% endif %}
-          </div>
+          <a class="btn primary" href="{{ url_for('reviews.detail', review_id=r.id) }}">Revisar</a>
         </div>
-        <div class="list-item">
-          <div class="grow">
-            <div class="name">TAF</div>
-            <div class="sub">
-              {% if today_summary.workout %}{{ today_summary.workout.status|replace('_', ' ') }}
-              {% elif active_workouts %}{{ active_workouts|length }} treino(s) vigente(s)
-              {% else %}nenhum treino vigente{% endif %}
-            </div>
-          </div>
-          <div class="strong small nowrap">
-            {% if today_summary.workout %}{{ today_summary.workout.workout_name|truncate(18) }}
-            {% elif active_workouts %}{{ active_workouts[0].name|truncate(18) }}
-            {% else %}<span class="dim">-</span>{% endif %}
-          </div>
-        </div>
-      </div>
-    </section>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="empty">Nenhuma revisao para hoje. Nada acumulado.</div>
+  {% endif %}
+</section>
 
-    {# --------------------------------------------------------------- CICLO #}
-    {% if progress.cycle %}
-      <section class="card">
-        <div class="card-head">
-          <div class="card-title">Ciclo</div>
-          <div class="spacer"></div>
-          <a class="btn sm ghost" href="{{ url_for('cycles.index') }}">Detalhes</a>
-        </div>
-        <div class="row mb">
-          <div class="strong">{{ progress.done_blocks }} / {{ progress.total_blocks }} blocos</div>
-          <span class="spacer"></span>
-          <span class="dim small">{{ progress.blocks_pct|num }}%</span>
-        </div>
-        {{ progress_bar(progress.done_blocks, progress.total_blocks) }}
-
-        <div class="grid cols-2 mt">
-          <div class="metric">
-            <div class="label">Horas PRF</div>
-            <div class="value">{{ progress.minutes|minutes }}</div>
-            <div class="hint">meta {{ progress.goal_minutes|minutes }} &middot; {{ progress.minutes_pct|num }}%</div>
-          </div>
-          <div class="metric">
-            <div class="label">Questoes</div>
-            <div class="value">{{ progress.questions }}</div>
-            <div class="hint">meta {{ progress.goal_questions }} &middot; {{ progress.questions_pct|num }}%</div>
-          </div>
-        </div>
-      </section>
-    {% endif %}
-
-    {# ---------------------------------------------------------- DESEMPENHO #}
-    <section class="card">
-      <div class="card-head">
-        <div class="card-title">Desempenho (30 dias)</div>
-        <div class="spacer"></div>
-        <a class="btn sm ghost" href="{{ url_for('performance.index') }}">Abrir</a>
-      </div>
-      <div class="grid cols-2">
-        <div class="metric">
-          <div class="label">Media de acerto</div>
-          <div class="value">{{ overall.accuracy|pct(0) if overall.accuracy is not none else '-' }}</div>
-          <div class="hint">{{ delta(evolution.accuracy_delta) }} vs 30 dias anteriores</div>
-        </div>
-        <div class="metric">
-          <div class="label">Horas estudadas</div>
-          <div class="value">{{ overall.minutes|minutes }}</div>
-          <div class="hint">{{ overall.questions }} questoes &middot; {{ overall.mocks }} simulado(s)</div>
-        </div>
-      </div>
-    </section>
-
-    {# ------------------------------------------------------------- ATENCAO #}
-    <section class="card">
-      <div class="card-head">
-        <div class="card-title">Atencao</div>
-        <div class="spacer"></div>
-        <a class="btn sm ghost" href="{{ url_for('performance.adjustments') }}">Sugestoes</a>
-      </div>
-      {% if weak_disciplines or weak_subjects %}
-        {% if weak_disciplines %}
-          <div class="subhead">Disciplinas</div>
-          <div class="list mb">
-            {% for row in weak_disciplines %}
-              <div class="list-item">
-                <span class="dot {{ row.accuracy|level }}"></span>
-                <div class="grow"><div class="name">{{ row.short_name }}</div>
-                  <div class="sub">{{ row.questions }} questoes</div></div>
-                {{ accuracy(row.accuracy) }}
-              </div>
-            {% endfor %}
-          </div>
-        {% endif %}
-        {% if weak_subjects %}
-          <div class="subhead">Assuntos</div>
-          <div class="list">
-            {% for row in weak_subjects %}
-              <div class="list-item">
-                <span class="dot {{ row.accuracy|level }}"></span>
-                <div class="grow"><div class="name">{{ row.short_name }} - {{ row.subject_name }}</div>
-                  <div class="sub">{{ row.questions }} questoes</div></div>
-                {{ accuracy(row.accuracy) }}
-              </div>
-            {% endfor %}
-          </div>
-        {% endif %}
-      {% else %}
-        <div class="empty">Sem pontos criticos com amostra suficiente ainda.</div>
-      {% endif %}
-    </section>
-
-    {# ------------------------------------------------------------ PENDENCIAS #}
-    {% if open_session or college_due %}
-      <section class="card">
-        <div class="card-head"><div class="card-title">Pendencias fora do ciclo</div></div>
-        <div class="list">
-          {% if open_session %}
-            <div class="list-item">
-              <span class="dot warn"></span>
-              <div class="grow">
-                <div class="name">TAF - {{ open_session.workout_name }}</div>
-                <div class="sub">treino iniciado em {{ open_session.date|date_br }} e nao encerrado</div>
-              </div>
-              <a class="btn sm primary" href="{{ url_for('workouts.run', session_id=open_session.id) }}">Retomar</a>
-            </div>
-          {% endif %}
-          {% for task in college_due %}
-            <div class="list-item">
-              <span class="dot {{ 'bad' if task.due_date and task.due_date < today else 'warn' }}"></span>
-              <div class="grow">
-                <div class="name">Faculdade - {{ task.title }}</div>
-                <div class="sub">{{ task.subject_name or 'sem disciplina' }} &middot; {{ task.due_date|date_br }}</div>
-              </div>
-              <a class="btn sm ghost" href="{{ url_for('college.index') }}">Abrir</a>
-            </div>
-          {% endfor %}
-        </div>
-      </section>
-    {% endif %}
-
-    {# ------------------------------------------------------ PROXIMOS BLOCOS #}
-    {% if upcoming_blocks %}
-      <section class="card">
-        <div class="card-head"><div class="card-title">Sequencia do ciclo</div></div>
-        <div class="list">
-          {% for item in upcoming_blocks %}
-            <div class="list-item">
-              <span class="badge {{ 'accent' if loop.first }}">{{ item.position }}</span>
-              <div class="grow"><div class="name">{{ item.discipline_name }}</div></div>
-              <span class="dim small">{{ item.planned_minutes }} min</span>
-            </div>
-          {% endfor %}
-        </div>
-      </section>
-    {% endif %}
+{# ========================================================= OBJETIVOS DO DIA #}
+<section class="card hoje">
+  <div class="card-head">
+    <div class="card-title big">&#128218; Estudar</div>
+    <div class="spacer"></div>
+    <a class="btn sm ghost" href="{{ url_for('disciplines.index') }}">Ajustar disciplinas</a>
   </div>
-</div>
+
+  {% if objectives %}
+    {% if objectives[0].fallback %}
+      <div class="tiny dim mb">
+        Nenhuma disciplina caiu na frequencia de hoje - mostrando as de maior prioridade.
+      </div>
+    {% endif %}
+    <div class="list">
+      {% for d in objectives %}
+        <div class="list-item">
+          <div class="grow">
+            <div class="name big">{{ d.name }}</div>
+            <div class="sub">
+              <span class="badge {{ 'accent' if d.priority == 'maxima' }}">{{ d.priority_label }}</span>
+              <span class="dim">{{ d.frequency_label }}</span>
+              {% if d.current_subject %}
+                &middot; em andamento: <span class="strong">{{ d.current_subject }}</span>
+              {% endif %}
+              {% if d.studied_today %}<span class="text-good strong">&middot; estudado hoje</span>{% endif %}
+            </div>
+          </div>
+          <a class="btn primary" href="{{ url_for('dashboard.study_form', discipline_id=d.id) }}">Estudar</a>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="empty">
+      Nenhuma disciplina ativa.
+      <a href="{{ url_for('disciplines.index') }}">Cadastre ou reative uma disciplina.</a>
+    </div>
+  {% endif %}
+</section>
+
+{# ==================================================== ASSUNTOS EM ANDAMENTO #}
+{% if open_subjects %}
+  <section class="card">
+    <div class="card-head">
+      <div class="card-title">Assuntos em andamento</div>
+      <div class="spacer"></div>
+      <span class="tiny dim">Termine um assunto para iniciar as revisoes</span>
+    </div>
+    <div class="list">
+      {% for s in open_subjects %}
+        <div class="list-item">
+          <div class="grow">
+            <div class="name">{{ s.short_name }} &mdash; {{ s.name }}</div>
+            <div class="sub dim">
+              {{ s.sessions }} registro(s){% if s.minutes %} &middot; {{ s.minutes|minutes }}{% endif %}
+              {% if s.last_date %} &middot; ultimo em {{ s.last_date|date_br }}{% endif %}
+            </div>
+          </div>
+          <form method="post" action="{{ url_for('dashboard.finish_subject', subject_id=s.id) }}" class="inline-form">
+            <button class="btn sm" type="submit">Terminei este assunto</button>
+          </form>
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+{% endif %}
+
+{# ==================================================================== RESUMO #}
+<section class="card flat">
+  <div class="card-head"><div class="card-title">&#128202; Resumo de hoje</div></div>
+  <div class="grid cols-3">
+    <div class="metric">
+      <div class="label">Estudos registrados</div>
+      <div class="value">{{ summary.studies }}</div>
+      <div class="hint">{{ summary.minutes|minutes }}</div>
+    </div>
+    <div class="metric">
+      <div class="label">Assuntos concluidos</div>
+      <div class="value">{{ summary.subjects_done }}</div>
+      <div class="hint">viraram revisao espacada</div>
+    </div>
+    <div class="metric">
+      <div class="label">Revisoes feitas</div>
+      <div class="value">{{ summary.reviews_done }}</div>
+      <div class="hint">{{ review_counts.due }} ainda na fila</div>
+    </div>
+  </div>
+</section>
 {% endblock %}

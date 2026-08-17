@@ -41,12 +41,14 @@ def overall(days: int | None = None, reference: str | None = None) -> dict:
     }
 
 
-def by_discipline(days: int | None = None, reference: str | None = None) -> list[dict]:
+def by_discipline(days: int | None = None, reference: str | None = None,
+                  active_only: bool = True) -> list[dict]:
     start, end = _period(days, reference)
     rows = query_all(
         """
         SELECT d.id, d.name, d.short_name, d.incidence, d.priority, d.status,
-               d.target_minutes,
+               d.target_minutes, d.block_minutes, d.desired_blocks, d.min_blocks,
+               d.frequency, d.active,
                COALESCE(q.total, 0)   AS questions,
                COALESCE(q.correct, 0) AS correct,
                COALESCE(s.minutes, 0) AS minutes,
@@ -60,10 +62,12 @@ def by_discipline(days: int | None = None, reference: str | None = None) -> list
             SELECT discipline_id, SUM(actual_minutes) AS minutes, MAX(date) AS last_date
             FROM study_sessions WHERE date BETWEEN ? AND ? GROUP BY discipline_id
         ) s ON s.discipline_id = d.id
-        WHERE d.active = 1
-        ORDER BY d.incidence DESC, d.name
+        WHERE (d.active = 1 OR ? = 0)
+        ORDER BY CASE d.priority WHEN 'maxima' THEN 0 WHEN 'alta' THEN 1
+                                 WHEN 'media' THEN 2 WHEN 'baixa' THEN 3 ELSE 1 END,
+                 d.incidence DESC, d.name
         """,
-        (start, end, start, end),
+        (start, end, start, end, 1 if active_only else 0),
     )
     out = []
     for row in rows:

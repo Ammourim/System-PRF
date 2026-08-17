@@ -2,7 +2,7 @@
 
 {% block title %}Montar ciclo - Sistema PRF{% endblock %}
 {% block heading %}Montar ciclo{% endblock %}
-{% block subtitle %}<div class="subtitle">Voce define quanto tempo cada disciplina recebe. O sistema apenas intercala os blocos.</div>{% endblock %}
+{% block subtitle %}<div class="subtitle">Voce define prioridade, meta e frequencia. O sistema calcula os blocos, mostra a diferenca contra a meta e nao decide nada por conta propria.</div>{% endblock %}
 
 {% block content %}
 <form method="post" action="{{ url_for('cycles.build') }}">
@@ -34,69 +34,124 @@
       Capacidade declarada: ~{{ capacity.total_minutes|minutes }} no periodo
       ({{ capacity.plantoes }} plantoes + {{ capacity.folgas }} folgas).
       Blocos: longo {{ block_sizes.longo }} min &middot; medio {{ block_sizes.medio }} min &middot; curto {{ block_sizes.curto }} min.
+      Tolerancia contra a meta: &plusmn;{{ plan.tolerance_pct|num(0) }}% ({{ plan.tolerance_minutes }} min).
     </div>
   </section>
 
   <section class="card">
     <div class="card-head">
-      <div class="card-title">Tempo por disciplina neste ciclo</div>
+      <div class="card-title">Por que cada disciplina entra no ciclo</div>
       <div class="spacer"></div>
-      <span class="tiny dim">Meta 0 = disciplina fica fora deste ciclo</span>
+      <span class="tiny dim">A prioridade define a ORDEM. A meta define o TEMPO.</span>
     </div>
     <div class="table-wrap">
       <table>
         <thead>
           <tr>
             <th>Disciplina</th>
-            <th class="right">Incidencia</th>
             <th>Prioridade</th>
+            <th class="right">Incidencia</th>
             <th>Status</th>
-            <th class="right">Meta no ciclo (min)</th>
+            <th class="right">Meta (min)</th>
             <th class="right">Bloco (min)</th>
+            <th class="right">Freq. fixa</th>
+            <th class="right">Minimo</th>
             <th class="right">Blocos</th>
+            <th class="right">Minutos reais</th>
+            <th class="right">Diferenca</th>
+            <th>No ciclo?</th>
           </tr>
         </thead>
         <tbody>
-          {% set ns = namespace(total=0) %}
           {% for d in disciplines %}
-            {% set count = ([1, ((d.target_minutes / (d.block_minutes or 60)) + 0.5)|int]|max) if d.target_minutes else 0 %}
-            {% set ns.total = ns.total + count * d.block_minutes %}
-            <tr>
-              <td class="strong">{{ d.name }}</td>
+            <tr class="{{ '' if d.included else 'muted' }}">
+              <td class="strong">{{ d.name }}<div class="tiny dim">{{ d.note }}</div>
+                <input type="hidden" name="row_{{ d.discipline_id }}" value="1"></td>
+              <td>
+                <select name="priority_{{ d.discipline_id }}" style="width:auto">
+                  {% for key, label in priorities.items() %}
+                    <option value="{{ key }}" {% if d.priority == key %}selected{% endif %}>{{ label }}</option>
+                  {% endfor %}
+                </select>
+              </td>
               <td class="right mono">{{ d.incidence|num(2) }}%</td>
-              <td><span class="badge {{ 'accent' if d.priority == 'maxima' }}">{{ d.priority }}</span></td>
-              <td class="muted small">{{ d.status|replace('_', ' ') }}</td>
-              <td class="right"><input type="text" name="target_{{ d.id }}" value="{{ d.target_minutes }}" style="width:90px; text-align:right"></td>
-              <td class="right"><input type="text" name="block_{{ d.id }}" value="{{ d.block_minutes }}" style="width:80px; text-align:right"></td>
-              <td class="right mono">{{ count }}</td>
+              <td class="muted small">{{ statuses.get(d.status, d.status) }}</td>
+              <td class="right"><input type="text" name="target_{{ d.discipline_id }}" value="{{ d.target_minutes }}" style="width:80px; text-align:right"></td>
+              <td class="right"><input type="text" name="block_{{ d.discipline_id }}" value="{{ d.block_minutes }}" style="width:70px; text-align:right"></td>
+              <td class="right"><input type="number" name="desired_{{ d.discipline_id }}" value="{{ d.desired_blocks }}" min="0" style="width:60px; text-align:right"></td>
+              <td class="right"><input type="number" name="min_{{ d.discipline_id }}" value="{{ d.min_blocks }}" min="0" style="width:60px; text-align:right"></td>
+              <td class="right mono strong">{{ d.blocks }}</td>
+              <td class="right mono">{{ d.planned_minutes }}</td>
+              <td class="right mono {{ 'bad' if d.diff else 'dim' }}">{{ '%+d'|format(d.diff) if d.diff else '0' }}</td>
+              <td>
+                <label class="check tiny">
+                  <input type="checkbox" name="active_{{ d.discipline_id }}" value="1" {% if d.active %}checked{% endif %}>
+                  {{ 'SIM' if d.included else 'nao' }}
+                </label>
+              </td>
             </tr>
           {% endfor %}
         </tbody>
         <tfoot>
           <tr>
-            <th colspan="6" class="right">Total planejado em blocos</th>
-            <th class="right">{{ ns.total|minutes }}</th>
+            <th colspan="8" class="right">Total</th>
+            <th class="right">{{ plan.total_blocks }}</th>
+            <th class="right">{{ plan.total_minutes }}</th>
+            <th class="right mono">{{ '%+d'|format(plan.diff) }}</th>
+            <th></th>
           </tr>
         </tfoot>
       </table>
     </div>
+    <div class="tiny dim mt">
+      <strong>Freq. fixa</strong>: 0 = o sistema calcula pela meta; qualquer outro valor manda no calculo.
+      <strong>Minimo</strong>: contato garantido por ciclo, mesmo com meta 0 (nao deixa a disciplina esquecida).
+      Meta 0 e minimo 0 = a disciplina fica fora deste ciclo, mas continua cadastrada.
+      Desmarcar "no ciclo" desativa a disciplina; marcar de novo a reativa.
+    </div>
   </section>
 
   <section class="card">
-    <div class="card-head"><div class="card-title">Previa da sequencia (com os valores atuais)</div></div>
-    <div class="row tight">
-      {% for item in preview %}
-        <span class="badge">{{ loop.index }}. {{ item.name }} ({{ item.block_minutes }})</span>
-      {% endfor %}
+    <div class="card-head"><div class="card-title">Previa antes de gerar</div></div>
+    <div class="row">
+      <div class="metric"><div class="label">Total planejado</div><div class="value">{{ plan.total_minutes|minutes }}</div></div>
+      <div class="metric"><div class="label">Meta</div><div class="value">{{ plan.goal_minutes|minutes }}</div></div>
+      <div class="metric"><div class="label">Diferenca</div><div class="value {{ 'bad' if not plan.within_tolerance else '' }}">{{ '%+d'|format(plan.diff) }} min</div></div>
+      <div class="metric"><div class="label">Blocos</div><div class="value">{{ plan.total_blocks }}</div></div>
+    </div>
+    {% if plan.warnings %}
+      <div class="box mt">
+        {% for w in plan.warnings %}<div class="tiny">&bull; {{ w }}</div>{% endfor %}
+      </div>
+    {% else %}
+      <div class="tiny dim mt">Plano dentro da tolerancia e sem meta de disciplina distorcida.</div>
+    {% endif %}
+
+    <div class="table-wrap mt">
+      <table>
+        <thead><tr><th class="right">#</th><th>Disciplina</th><th>Prioridade</th><th class="right">Minutos</th></tr></thead>
+        <tbody>
+          {% for item in preview %}
+            <tr>
+              <td class="right mono dim">{{ loop.index }}</td>
+              <td class="strong">{{ item.name }}</td>
+              <td><span class="badge {{ 'accent' if item.priority == 'maxima' }}">{{ priorities.get(item.priority, item.priority) }}</span></td>
+              <td class="right mono">{{ item.block_minutes }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
     <div class="tiny dim mt">
-      Total da previa: {{ preview|length }} blocos, {{ planned_minutes|minutes }}.
-      A previa e recalculada ao salvar com os valores da tabela acima.
+      A sequencia segue a prioridade em rodadas: dentro de cada rodada vem primeiro as de
+      prioridade maxima, depois alta, media e baixa. Uma disciplina nunca aparece cedo
+      apenas por ter mais blocos.
     </div>
   </section>
 
   <section class="card">
     <div class="form-actions">
+      <button class="btn" type="submit" name="preview_only" value="1">Salvar e recalcular previa</button>
       <button class="btn primary" type="submit">Criar novo ciclo</button>
       {% if has_active %}
         <button class="btn" type="submit" name="rebuild_current" value="1"
@@ -107,6 +162,7 @@
       <a class="btn ghost" href="{{ url_for('cycles.index') }}">Cancelar</a>
     </div>
     <div class="tiny dim mt">
+      "Salvar e recalcular previa" grava a tabela acima e recarrega esta tela sem gerar ciclo nenhum.
       Criar um novo ciclo encerra o atual (o historico continua acessivel no relatorio).
     </div>
   </section>

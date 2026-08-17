@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block title %}Estudar {{ discipline.name }} - Sistema PRF{% endblock %}
+{% block heading %}Registrar estudo{% endblock %}
+{% block subtitle %}<div class="subtitle">{{ today|date_br }}</div>{% endblock %}
+
+{% block content %}
+<section class="card form-card">
+  <form method="post" action="{{ url_for('dashboard.study_save') }}">
+    <input type="hidden" name="discipline_id" value="{{ discipline.id }}">
+
+    <div class="field">
+      <label>Disciplina</label>
+      <div class="readonly-value">{{ discipline.name }}</div>
+    </div>
+
+    <div class="field">
+      <label for="subject_name">Assunto</label>
+      <input type="text" id="subject_name" name="subject_name" list="assuntos-{{ discipline.id }}"
+             value="{{ subject_name }}" placeholder="Ex.: Infracoes de transito"
+             autofocus required autocomplete="off">
+      <datalist id="assuntos-{{ discipline.id }}">
+        {% for s in subject_suggestions %}<option value="{{ s.name }}">{% endfor %}
+      </datalist>
+      <div class="tiny dim">Digite livremente. Se o assunto ja existir, ele e reaproveitado.</div>
+    </div>
+
+    <div class="form-grid cols-2">
+      <div class="field">
+        <label for="minutes">Tempo (opcional)</label>
+        <input type="text" id="minutes" name="minutes" inputmode="numeric"
+               placeholder="Ex.: 40, 1h30">
+      </div>
+      <div class="field">
+        <label for="date">Data</label>
+        <input type="date" id="date" name="date" value="{{ today }}">
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="notes">Observacao (opcional)</label>
+      <input type="text" id="notes" name="notes" placeholder="O que ficou faltando, duvidas...">
+    </div>
+
+    <details class="box">
+      <summary>Questoes (opcional)</summary>
+      <div class="form-grid cols-2">
+        <div class="field">
+          <label for="questions_total">Questoes</label>
+          <input type="number" id="questions_total" name="questions_total" min="0" placeholder="0">
+        </div>
+        <div class="field">
+          <label for="questions_correct">Acertos</label>
+          <input type="number" id="questions_correct" name="questions_correct" min="0" placeholder="0">
+        </div>
+      </div>
+      <div class="tiny dim">Fica apenas registrado. Nao altera os objetivos nem as revisoes.</div>
+    </details>
+
+    <div class="form-actions">
+      <button class="btn primary big" type="submit">Salvar estudo</button>
+      <a class="btn ghost" href="{{ url_for('dashboard.index') }}">Cancelar</a>
+    </div>
+
+    <label class="check finish-check">
+      <input type="checkbox" name="finish_subject" value="1">
+      <span>Terminei este assunto (vou agendar as revisoes agora)</span>
+    </label>
+    <div class="tiny dim">
+      Sem marcar isso, o assunto continua em andamento - voce pode registrar estudo
+      no mesmo assunto quantos dias quiser.
+    </div>
+  </form>
+</section>
+{% endblock %}

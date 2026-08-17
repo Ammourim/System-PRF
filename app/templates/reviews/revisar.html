@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+
+{% block title %}Revisar - Sistema PRF{% endblock %}
+{% block heading %}Revisao{% endblock %}
+
+{% block content %}
+<section class="card form-card center-card">
+  <div class="field">
+    <label>Disciplina</label>
+    <div class="readonly-value">{{ review.discipline_name }}</div>
+  </div>
+
+  <div class="field">
+    <label>Assunto</label>
+    <div class="readonly-value">{{ review.subject_name or review.title or 'Revisao' }}</div>
+  </div>
+
+  <div class="field">
+    <label>Tipo</label>
+    <div class="readonly-value">
+      Revisao {{ review.label }}
+      {% if review.urgency == 'atrasada' %}
+        <span class="badge bad">atrasada ha {{ review.late_days }} dia(s)</span>
+      {% elif review.urgency == 'hoje' %}
+        <span class="badge warn">vence hoje</span>
+      {% else %}
+        <span class="badge">prevista para {{ review.next_date|date_br }}</span>
+      {% endif %}
+    </div>
+  </div>
+
+  <form method="post" action="{{ url_for('reviews.complete', review_id=review.id) }}">
+    <input type="hidden" name="next" value="{{ url_for('dashboard.index') }}">
+    <div class="field">
+      <label for="done_date">Data da conclusao</label>
+      <input type="date" id="done_date" name="done_date" value="{{ today }}">
+      <div class="tiny dim">
+        A proxima revisao e contada a partir desta data - nao da data que estava prevista.
+      </div>
+    </div>
+    <div class="form-actions">
+      <button class="btn primary big" type="submit">Concluir revisao</button>
+      <a class="btn ghost" href="{{ url_for('dashboard.index') }}">Voltar</a>
+    </div>
+  </form>
+
+  <div class="row tight mt">
+    <form method="post" action="{{ url_for('reviews.snooze', review_id=review.id) }}" class="inline-form">
+      <input type="hidden" name="days" value="1">
+      <input type="hidden" name="next" value="{{ url_for('dashboard.index') }}">
+      <button class="btn sm ghost" type="submit">Adiar 1 dia</button>
+    </form>
+    <form method="post" action="{{ url_for('reviews.archive', review_id=review.id) }}" class="inline-form">
+      <input type="hidden" name="next" value="{{ url_for('dashboard.index') }}">
+      <button class="btn sm ghost" type="submit">Arquivar (nao preciso mais)</button>
+    </form>
+  </div>
+
+  <div class="tiny dim mt">
+    Sequencia completa: {% for i in intervals %}<span class="badge">D{{ i }}</span> {% endfor %}
+    {% if review.times_done %} &middot; ja concluida {{ review.times_done }}x{% endif %}
+  </div>
+</section>
+{% endblock %}

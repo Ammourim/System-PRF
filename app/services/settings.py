@@ -16,6 +16,9 @@ DEFAULTS: dict[str, str] = {
     "prf_goal_minutes": "1800",          # 30h por ciclo de 14 dias
     "questions_goal_per_cycle": "350",
     "questions_goal_per_folga": "50",
+    # Montagem do ciclo
+    "cycle_goal_tolerance_pct": "5",     # divergencia aceita contra prf_goal_minutes
+    "cycle_min_block_minutes": "30",     # piso ao dividir a meta em blocos
     # Tamanhos de bloco (minutos)
     "block_long": "90",
     "block_medium": "60",
@@ -25,10 +28,10 @@ DEFAULTS: dict[str, str] = {
     "folga_hours": "6",
     "plantoes_per_cycle": "7",
     "folgas_per_cycle": "7",
+    # Objetivos do dia (o ciclo simplificado)
+    "today_max_disciplines": "5",        # teto de disciplinas por dia (0 = sem teto)
     # Revisao espacada
     "review_intervals": "1,7,15,30,60",
-    "review_difficulty_easy_factor": "1.5",
-    "review_difficulty_hard_factor": "0.6",
     # Simulados
     "mock_frequency": "quinzenal",       # semanal|quinzenal|mensal|manual
     "mock_default_minutes": "300",

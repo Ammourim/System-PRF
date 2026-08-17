@@ -74,7 +74,7 @@ def _reasons(row: dict, low: float, mid: float, stale_days: int | None,
             reasons.append(f"Incidencia alta ({incidence:.2f}%) reforca a prioridade.")
     else:
         reasons.append(f"Aproveitamento {accuracy:.0f}% dentro do esperado.")
-        if accuracy >= 85 and incidence < 6 and row["priority"] == "complementar":
+        if accuracy >= 85 and incidence < 6 and row["priority"] in ("media", "baixa"):
             direction = "reduzir"
             reasons.append(
                 f"Incidencia baixa ({incidence:.2f}%) e desempenho alto: da para "

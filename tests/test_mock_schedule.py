@@ -109,13 +109,22 @@ def test_registrar_simulado_limpa_o_adiamento(client, app):
         assert status["is_due"] is False
 
 
-def test_aviso_aparece_e_some_no_painel(client, app):
+def test_aviso_vive_na_tela_de_simulados_e_nao_na_inicial(client, app):
+    """Simulado saiu da tela Hoje: o aviso existe, mas dentro do proprio modulo."""
     with app.app_context():
         _mock(days_ago=20)
-    assert "Simulado recomendado" in client.get("/").get_data(as_text=True)
+
+    pagina = client.get("/simulados/").get_data(as_text=True)
+    assert "Venceu ha" in pagina
+
+    # A tela inicial responde so "o que estudar" e "o que revisar": o aviso de
+    # simulado nao aparece mais la (o link no menu continua existindo).
+    inicial = client.get("/").get_data(as_text=True)
+    assert "Simulado recomendado" not in inicial
+    assert "Venceu ha" not in inicial
 
     client.post("/simulados/adiar", data={"days": "3"}, follow_redirects=True)
-    assert "Simulado recomendado" not in client.get("/").get_data(as_text=True)
+    assert "Aviso adiado ate" in client.get("/simulados/").get_data(as_text=True)
 
 
 def test_aviso_nao_cria_nada_nem_mexe_no_ciclo(client, app):

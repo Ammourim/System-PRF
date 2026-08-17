@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block title %}Agendar revisoes - Sistema PRF{% endblock %}
+{% block heading %}Assunto concluido{% endblock %}
+
+{% block content %}
+<section class="card form-card center-card">
+  <div class="eyebrow">{{ subject.discipline_name }}</div>
+  <div class="title big">{{ subject.name }}</div>
+
+  {% if pending %}
+    <div class="empty mt">
+      Este assunto ja tem uma revisao pendente ({{ pending.next_date|date_br }}).
+      Nada foi duplicado.
+    </div>
+    <div class="form-actions">
+      <a class="btn primary" href="{{ url_for('dashboard.index') }}">Voltar para Hoje</a>
+    </div>
+  {% else %}
+    <p class="question">Deseja agendar as revisoes espacadas?</p>
+    <div class="tiny dim mb">
+      Sequencia: {% for i in intervals %}<span class="badge">D{{ i }}</span> {% endfor %}
+      &mdash; contadas a partir de hoje e, depois, da data real de cada conclusao.
+    </div>
+
+    <div class="row">
+      <form method="post" action="{{ url_for('dashboard.finish_subject', subject_id=subject.id) }}" class="inline-form">
+        <input type="hidden" name="agendar" value="1">
+        <input type="hidden" name="date" value="{{ subject.completed_at or today }}">
+        <button class="btn primary big" type="submit">Sim, agendar</button>
+      </form>
+      <form method="post" action="{{ url_for('dashboard.finish_subject', subject_id=subject.id) }}" class="inline-form">
+        <input type="hidden" name="agendar" value="0">
+        <input type="hidden" name="date" value="{{ subject.completed_at or today }}">
+        <button class="btn big" type="submit">Nao</button>
+      </form>
+      <form method="post" action="{{ url_for('dashboard.reopen_subject', subject_id=subject.id) }}" class="inline-form">
+        <button class="btn ghost" type="submit">Nao terminei ainda (reabrir)</button>
+      </form>
+    </div>
+  {% endif %}
+</section>
+{% endblock %}

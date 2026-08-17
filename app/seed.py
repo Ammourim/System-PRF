@@ -14,22 +14,34 @@ from .services.cycle import plan_from_disciplines, spread
 from .services.settings import DEFAULTS
 from .utils import percentage, to_iso, today as today_date
 
-# (nome, sigla, incidencia %, prioridade, status, bloco min, meta min/ciclo)
+# Prioridade da fase INICIAL de preparacao. Nenhuma disciplina do edital fica de
+# fora do cadastro: prioridade baixa recebe contato minimo (`min_blocks`), nao
+# exclusao. Tudo aqui e editavel na tela de disciplinas e na de montar ciclo.
+#
+# As metas fecham exatamente na meta do ciclo (1800 min = 30h em 14 dias) e cada
+# meta e multipla do bloco escolhido - assim nao existe residuo de arredondamento:
+#   450 + 270 + (6 x 120) + (2 x 90) + (4 x 45) = 1800
+#
+# A ORDEM DESTA LISTA NAO E A ORDEM DO CICLO - ela so define os ids. Quem ordena o
+# ciclo e a prioridade (ver `services/cycle.spread`). Manter a ordem original evita
+# renumerar disciplinas que ja tem historico.
+#
+# (nome, sigla, incidencia %, prioridade, status, bloco min, meta min/ciclo, min blocos)
 DISCIPLINES: list[tuple] = [
-    ("Legislacao de Transito", "CTB", 25.00, "maxima", "em_andamento", 90, 420),
-    ("Lingua Portuguesa", "Portugues", 15.00, "maxima", "em_andamento", 90, 270),
-    ("Lingua Estrangeira - Espanhol", "Espanhol", 6.70, "base", "nao_iniciada", 60, 90),
-    ("Direito Administrativo", "Administrativo", 5.80, "base", "em_andamento", 90, 120),
-    ("Direito Constitucional", "Constitucional", 5.80, "base", "em_andamento", 90, 120),
-    ("Informatica", "Informatica", 5.80, "base", "nao_iniciada", 60, 120),
-    ("Raciocinio Logico-Matematico", "RLM", 5.00, "base", "em_andamento", 60, 120),
-    ("Legislacao Especial", "Leg. Especial", 5.00, "base", "em_andamento", 60, 105),
-    ("Etica e Cidadania", "Etica", 5.00, "base", "em_andamento", 60, 90),
-    ("Direito Penal", "Penal", 4.20, "complementar", "em_andamento", 60, 90),
-    ("Direito Processual Penal", "Processo Penal", 4.20, "complementar", "em_andamento", 60, 90),
-    ("Direitos Humanos", "Dir. Humanos", 4.20, "complementar", "nao_iniciada", 45, 60),
-    ("Geopolitica", "Geopolitica", 4.20, "complementar", "nao_iniciada", 45, 60),
-    ("Fisica", "Fisica", 4.00, "complementar", "nao_iniciada", 45, 60),
+    ("Legislacao de Transito", "CTB", 25.00, "maxima", "em_andamento", 90, 450, 0),
+    ("Lingua Portuguesa", "Portugues", 15.00, "maxima", "em_andamento", 90, 270, 0),
+    ("Lingua Estrangeira - Espanhol", "Espanhol", 6.70, "baixa", "nao_iniciada", 45, 45, 1),
+    ("Direito Administrativo", "Administrativo", 5.80, "alta", "em_andamento", 60, 120, 0),
+    ("Direito Constitucional", "Constitucional", 5.80, "alta", "em_andamento", 60, 120, 0),
+    ("Informatica", "Informatica", 5.80, "alta", "nao_iniciada", 60, 120, 0),
+    ("Raciocinio Logico-Matematico", "RLM", 5.00, "alta", "em_andamento", 60, 120, 0),
+    ("Legislacao Especial", "Leg. Especial", 5.00, "alta", "em_andamento", 60, 120, 0),
+    ("Etica e Cidadania", "Etica", 5.00, "alta", "em_andamento", 60, 120, 0),
+    ("Direito Penal", "Penal", 4.20, "media", "em_andamento", 90, 90, 0),
+    ("Direito Processual Penal", "Processo Penal", 4.20, "media", "em_andamento", 90, 90, 0),
+    ("Direitos Humanos", "Dir. Humanos", 4.20, "baixa", "nao_iniciada", 45, 45, 1),
+    ("Geopolitica", "Geopolitica", 4.20, "baixa", "nao_iniciada", 45, 45, 1),
+    ("Fisica", "Fisica", 4.00, "baixa", "nao_iniciada", 45, 45, 1),
 ]
 
 TAF_TESTS = [
@@ -80,11 +92,16 @@ def _ensure_disciplines(conn: sqlite3.Connection) -> None:
     if existing:
         return
     for position, item in enumerate(DISCIPLINES, start=1):
-        name, short, incidence, priority, status, block, target = item
+        name, short, incidence, priority, status, block, target, min_blocks = item
+        # Frequencia (dias por semana nos objetivos) nasce da prioridade e pode
+        # ser editada em Disciplinas.
+        frequency = {"maxima": 5, "alta": 3, "media": 2, "baixa": 1}.get(priority, 2)
         conn.execute(
             "INSERT INTO disciplines (name, short_name, incidence, priority, status,"
-            " block_minutes, target_minutes, position) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (name, short, incidence, priority, status, block, target, position),
+            " block_minutes, target_minutes, min_blocks, position, frequency)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (name, short, incidence, priority, status, block, target, min_blocks, position,
+             frequency),
         )
 
 
@@ -103,9 +120,12 @@ def _ensure_taf_tests(conn: sqlite3.Connection) -> None:
 def _ensure_first_cycle(conn: sqlite3.Connection) -> None:
     if conn.execute("SELECT COUNT(*) FROM study_cycles").fetchone()[0]:
         return
+    # A ordem final vem da prioridade (aplicada em `generate_cycle_plan`); aqui a
+    # consulta so precisa entregar todas as disciplinas ativas.
     rows = conn.execute(
-        "SELECT id, name, block_minutes, target_minutes FROM disciplines"
-        " WHERE active = 1 ORDER BY incidence DESC, position"
+        "SELECT id, name, short_name, incidence, priority, status, active, block_minutes,"
+        " target_minutes, desired_blocks, min_blocks FROM disciplines"
+        " WHERE active = 1 ORDER BY position"
     ).fetchall()
     plan = plan_from_disciplines(rows)
     start = today_date()

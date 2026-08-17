@@ -28,7 +28,9 @@ System-PRF/
 │   ├── migrations/           001_initial.sql, 002_*.sql ...
 │   ├── services/             regras de negocio (o cerebro do sistema)
 │   │   ├── settings.py       leitura/escrita das configuracoes
-│   │   ├── cycle.py          geracao dos blocos, posicao, progresso
+│   │   ├── today.py          objetivos do dia (o "ciclo" simplificado)
+│   │   ├── subjects.py       assunto livre e conclusao do assunto
+│   │   ├── cycle.py          ciclo detalhado (legado): blocos, posicao, progresso
 │   │   ├── reviews.py        revisao espacada
 │   │   ├── stats.py          desempenho, evolucao, pontos fracos
 │   │   ├── adaptive.py       sugestoes de ajuste e relatorio de ciclo
@@ -43,9 +45,47 @@ System-PRF/
 
 **Regra de camadas:** blueprints leem o formulario, chamam um service e renderizam.
 Calculo de verdade mora em `services/`. Isso e o que permite testar as regras sem HTTP -
-`tests/test_cycle.py`, `test_reviews.py` e `test_stats.py` nao passam por rota nenhuma.
+`tests/test_cycle.py`, `test_reviews.py`, `test_today.py` e `test_stats.py` nao
+passam por rota nenhuma.
 
-## Conceito central: o ciclo nao depende de calendario
+## Conceito central: o sistema responde duas perguntas
+
+    "O que eu preciso estudar hoje?"   -> objetivos do dia (services/today.py)
+    "O que eu preciso revisar hoje?"   -> fila de revisoes (services/reviews.py)
+
+Tudo o mais e secundario e vive fora da tela inicial. Detalhes da simplificacao:
+`SIMPLIFICACAO.md`.
+
+### Objetivos do dia (`services/today.py`)
+
+Cada disciplina ativa tem uma **frequencia** (1 a 7 dias por semana; o padrao vem da
+prioridade: maxima 5, alta 3, media 2, baixa 1). Um espalhamento tipo Bresenham garante
+que, em quaisquer 7 dias consecutivos, a disciplina aparece exatamente `frequencia`
+vezes - e o deslocamento por id evita que todas caiam no mesmo dia.
+
+A funcao e pura em relacao ao banco: **abrir a tela nao grava nada** e a mesma data
+sempre produz a mesma lista. Nao ha minutos, blocos, metas nem distribuicao matematica.
+Um dia sem estudo nao gera pendencia: amanha o dia e recalculado do zero.
+
+### Assunto e conclusao (`services/subjects.py`)
+
+Registrar estudo **nunca** conclui um assunto. Estudar "Infracoes" tres dias seguidos
+gera tres registros e o assunto continua em andamento. So quando o usuario declara
+"terminei este assunto" o sistema grava `subjects.completed_at` e pergunta se deve
+agendar as revisoes.
+
+### Revisao espacada (`services/reviews.py`)
+
+Sem algoritmo: proxima data = **data real da conclusao** + proximo intervalo da lista
+(`review_intervals`, padrao 1,7,15,30,60). Atraso nao duplica linha; depois do ultimo
+intervalo o assunto e consolidado e sai da fila.
+
+## O ciclo antigo: preservado, fora do caminho
+
+O ciclo com blocos, metas e distribuicao continua funcionando em
+"Avancado > Ciclo detalhado". Nada foi removido - apenas saiu do fluxo diario.
+
+## Conceito do ciclo detalhado: nao depende de calendario
 
 Um ciclo e uma **lista ordenada de blocos** (`cycle_blocks`) e uma **posicao**
 (`study_cycles.current_position`). O dashboard mostra o bloco da posicao atual. Concluir
@@ -59,16 +99,38 @@ Nenhum job, nenhuma data e nenhuma virada de dia mexe nisso. Por consequencia, f
 dias sem estudar nao produz efeito algum: a posicao continua onde estava. E o que torna o
 sistema compativel com a escala 12x36.
 
-### Geracao dos blocos (`cycle.spread`)
+### Geracao dos blocos (`cycle.generate_cycle_plan`)
 
-Cada disciplina tem uma meta em minutos por ciclo e um tamanho de bloco. O numero de
-blocos e `round(meta / tamanho)`. Para intercalar, o i-esimo bloco de uma disciplina com
-`k` blocos recebe a chave `(i + 0.5) / k` e tudo e ordenado por essa chave - blocos ficam
-espalhados proporcionalmente ao peso. Como muitos empates podem juntar dois blocos da
-mesma disciplina, um segundo passo (`_separate_neighbours`) troca vizinhos repetidos.
+Tres campos com papeis separados, para que nenhum deles decida o que nao e da sua conta:
 
-O resultado e uma sugestao: a tela **Ciclo** permite editar, reordenar, remover e
-acrescentar blocos manualmente.
+| Campo | Papel |
+|---|---|
+| `priority` (`maxima/alta/media/baixa`) | **a ORDEM** no ciclo |
+| `target_minutes` | **o TEMPO** da disciplina no ciclo |
+| `incidence` | desempate **dentro** da mesma prioridade |
+| `desired_blocks` / `min_blocks` | controle manual: frequencia fixa e contato minimo |
+
+**Quantidade e tamanho dos blocos** (`blocks_for_target`): nao existe `round()`. O sistema
+usa o teto de `meta / bloco` - assim nenhum bloco fica maior que o tamanho preferido - e
+distribui a meta entre esses blocos em multiplos de 5 minutos, somando **exatamente** a
+meta. Antes, `round(120 / 90) = 1` transformava uma meta de 120 min em 90 min sem avisar;
+hoje viram dois blocos de 60. Se o piso `cycle_min_block_minutes` for violado, cai para o
+numero menor de blocos e a diferenca resultante e **mostrada na tela**, nunca escondida.
+
+**Ordem** (`spread`): o ciclo e montado em rodadas. Numa rodada cada disciplina entra no
+maximo uma vez, na ordem prioridade -> incidencia -> ordem recebida; uma disciplina com `k`
+blocos entra na rodada `i * rodadas // k`, o que espalha os blocos sem furar a fila. Assim
+uma disciplina de prioridade baixa **nunca** aparece cedo apenas por ter mais blocos.
+`_separate_neighbours` desfaz repeticoes vizinhas, mas **somente dentro da mesma
+prioridade** - de-clumping nunca custa a ordem.
+
+**Meta do ciclo**: o total planejado e comparado com `prf_goal_minutes` dentro de
+`cycle_goal_tolerance_pct`. Fora da tolerancia o sistema **avisa**; nao reescreve meta
+nenhuma por conta propria.
+
+O resultado e uma sugestao: a tela **Montar ciclo** mostra blocos, minutos reais e a
+diferenca por disciplina antes de gerar, e a tela **Ciclo** permite editar, reordenar,
+remover e acrescentar blocos manualmente.
 
 ## Revisao espacada: simples de proposito
 

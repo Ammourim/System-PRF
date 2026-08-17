@@ -5,25 +5,32 @@ from __future__ import annotations
 from flask import Blueprint, flash, redirect, render_template, request, url_for
 
 from ..db import execute, insert, query_all, query_one, scalar
+from ..services import settings as settings_service
 from ..services import stats
-from ..utils import as_bool, as_float, as_int, as_opt_int, as_text, parse_minutes, percentage
-from .common import DISCIPLINE_STATUS, PRIORITIES, redirect_target
+from ..services import subjects as subjects_service
+from ..services import today as today_service
+from ..utils import (as_bool, as_float, as_int, as_opt_int, as_text, parse_minutes,
+                     percentage, today_iso)
+from .common import DEFAULT_PRIORITY, DISCIPLINE_STATUS, PRIORITIES, redirect_target
 
 bp = Blueprint("disciplines", __name__, url_prefix="/disciplinas")
 
 
 @bp.route("/")
 def index():
-    rows = stats.by_discipline(days=None)
-    total_target = sum(r["target_minutes"] or 0 for r in rows)
-    incidence_total = sum(r["incidence"] or 0 for r in rows)
+    """Prioridade e frequencia: as duas unicas decisoes que montam o dia."""
+    rows = [dict(r, frequency_value=today_service.frequency_of(r))
+            for r in stats.by_discipline(days=None, active_only=False)]
     return render_template(
         "disciplines/index.html",
         disciplines=rows,
-        total_target=total_target,
-        incidence_total=incidence_total,
+        total_target=sum(r["target_minutes"] or 0 for r in rows),
+        incidence_total=sum(r["incidence"] or 0 for r in rows),
         statuses=DISCIPLINE_STATUS,
         priorities=PRIORITIES,
+        frequency_labels=today_service.FREQUENCY_LABELS,
+        max_per_day=today_service.max_per_day(),
+        objectives=today_service.objectives(),
     )
 
 
@@ -37,17 +44,20 @@ def create():
         flash("Ja existe uma disciplina com esse nome.", "error")
         return redirect(url_for("disciplines.index"))
     position = int(scalar("SELECT COALESCE(MAX(position), 0) FROM disciplines", (), 0)) + 1
+    priority = (request.form.get("priority") if request.form.get("priority") in PRIORITIES
+                else DEFAULT_PRIORITY)
+    frequency = as_int(request.form.get("frequency"), 0)
     insert(
         "INSERT INTO disciplines (name, short_name, incidence, priority, status, block_minutes,"
-        " target_minutes, position) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        " target_minutes, position, frequency) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         (name, as_text(request.form.get("short_name"), name[:20], max_length=30),
          as_float(request.form.get("incidence"), 0),
-         request.form.get("priority", "base") if request.form.get("priority") in PRIORITIES
-         else "base",
+         priority,
          request.form.get("status", "nao_iniciada")
          if request.form.get("status") in DISCIPLINE_STATUS else "nao_iniciada",
          max(5, parse_minutes(request.form.get("block_minutes"), 60)),
-         parse_minutes(request.form.get("target_minutes"), 0), position))
+         parse_minutes(request.form.get("target_minutes"), 0), position,
+         max(1, min(7, frequency)) if frequency else today_service.default_frequency(priority)))
     flash(f"Disciplina '{name}' criada.", "success")
     return redirect(url_for("disciplines.index"))
 
@@ -84,6 +94,9 @@ def detail(discipline_id: int):
         discipline=row,
         subjects=subject_data,
         statuses=DISCIPLINE_STATUS,
+        subject_statuses=subjects_service.STATUS,
+        frequency=today_service.frequency_of(row),
+        frequency_labels=today_service.FREQUENCY_LABELS,
         priorities=PRIORITIES,
         recent_sessions=query_all(
             "SELECT s.*, sub.name AS subject_name FROM study_sessions s"
@@ -99,19 +112,25 @@ def detail(discipline_id: int):
 
 @bp.route("/<int:discipline_id>/salvar", methods=["POST"])
 def update(discipline_id: int):
-    priority = request.form.get("priority", "base")
+    priority = request.form.get("priority", DEFAULT_PRIORITY)
     status = request.form.get("status", "nao_iniciada")
+    if "frequency" in request.form:
+        value = as_int(request.form.get("frequency"), 0)
+        execute("UPDATE disciplines SET frequency = ? WHERE id = ?",
+                (max(1, min(7, value)) if value else 0, discipline_id))
     execute(
         "UPDATE disciplines SET name = ?, short_name = ?, incidence = ?, priority = ?,"
-        " status = ?, block_minutes = ?, target_minutes = ?, active = ?, notes = ?"
-        " WHERE id = ?",
+        " status = ?, block_minutes = ?, target_minutes = ?, desired_blocks = ?,"
+        " min_blocks = ?, active = ?, notes = ? WHERE id = ?",
         (as_text(request.form.get("name"), max_length=120),
          as_text(request.form.get("short_name"), max_length=30),
          as_float(request.form.get("incidence"), 0),
-         priority if priority in PRIORITIES else "base",
+         priority if priority in PRIORITIES else DEFAULT_PRIORITY,
          status if status in DISCIPLINE_STATUS else "nao_iniciada",
          max(5, parse_minutes(request.form.get("block_minutes"), 60)),
          parse_minutes(request.form.get("target_minutes"), 0),
+         max(0, as_int(request.form.get("desired_blocks"), 0)),
+         max(0, as_int(request.form.get("min_blocks"), 0)),
          as_bool(request.form.get("active")),
          as_text(request.form.get("notes")), discipline_id))
     flash("Disciplina atualizada.", "success")
@@ -121,15 +140,35 @@ def update(discipline_id: int):
 
 @bp.route("/pesos", methods=["POST"])
 def bulk_update():
-    """Edicao rapida de incidencia/meta direto na listagem (ex.: novo edital)."""
+    """Edicao rapida direto na listagem: prioridade, frequencia e ativa/inativa."""
+    if "today_max_disciplines" in request.form:
+        settings_service.set_value(
+            "today_max_disciplines",
+            max(0, min(20, as_int(request.form.get("today_max_disciplines"), 5))))
+
     for row in query_all("SELECT id FROM disciplines"):
         did = row["id"]
+        # Checkbox nao enviado != desmarcado: so mexe em `active` quando a linha
+        # veio no formulario (campo oculto `row_<id>`).
+        if f"row_{did}" in request.form:
+            execute("UPDATE disciplines SET active = ? WHERE id = ?",
+                    (as_bool(request.form.get(f"active_{did}")), did))
+        if f"frequency_{did}" in request.form:
+            value = as_int(request.form.get(f"frequency_{did}"), 0)
+            execute("UPDATE disciplines SET frequency = ? WHERE id = ?",
+                    (max(1, min(7, value)) if value else 0, did))
         if f"incidence_{did}" in request.form:
             execute("UPDATE disciplines SET incidence = ? WHERE id = ?",
                     (as_float(request.form.get(f"incidence_{did}"), 0), did))
         if f"target_{did}" in request.form:
             execute("UPDATE disciplines SET target_minutes = ? WHERE id = ?",
                     (parse_minutes(request.form.get(f"target_{did}"), 0), did))
+        if f"desired_{did}" in request.form:
+            execute("UPDATE disciplines SET desired_blocks = ? WHERE id = ?",
+                    (max(0, as_int(request.form.get(f"desired_{did}"), 0)), did))
+        if f"min_{did}" in request.form:
+            execute("UPDATE disciplines SET min_blocks = ? WHERE id = ?",
+                    (max(0, as_int(request.form.get(f"min_{did}"), 0)), did))
         if f"priority_{did}" in request.form:
             value = request.form.get(f"priority_{did}")
             if value in PRIORITIES:
@@ -138,7 +177,7 @@ def bulk_update():
             value = request.form.get(f"status_{did}")
             if value in DISCIPLINE_STATUS:
                 execute("UPDATE disciplines SET status = ? WHERE id = ?", (value, did))
-    flash("Pesos e metas atualizados.", "success")
+    flash("Disciplinas atualizadas.", "success")
     return redirect(url_for("disciplines.index"))
 
 
@@ -173,8 +212,10 @@ def create_subject(discipline_id: int):
         if query_one("SELECT id FROM subjects WHERE discipline_id = ? AND lower(name) = lower(?)",
                      (discipline_id, name)):
             continue
+        status = request.form.get("status", "nao_iniciada")
         insert("INSERT INTO subjects (discipline_id, name, status) VALUES (?, ?, ?)",
-               (discipline_id, name, request.form.get("status", "nao_iniciada")))
+               (discipline_id, name,
+                status if status in subjects_service.STATUS else "nao_iniciada"))
         created += 1
     flash(f"{created} assunto(s) cadastrado(s).", "success")
     return redirect(url_for("disciplines.detail", discipline_id=discipline_id))
@@ -186,10 +227,16 @@ def update_subject(subject_id: int):
     if row is None:
         flash("Assunto nao encontrado.", "error")
         return redirect(url_for("disciplines.index"))
-    execute("UPDATE subjects SET name = ?, status = ?, notes = ? WHERE id = ?",
-            (as_text(request.form.get("name"), max_length=120),
-             request.form.get("status", "nao_iniciada"),
-             as_text(request.form.get("notes")), subject_id))
+    status = request.form.get("status", "em_andamento")
+    if status not in subjects_service.STATUS:
+        status = "em_andamento"
+    # Concluir aqui tem o mesmo peso de concluir na tela Hoje: grava a data.
+    execute(
+        "UPDATE subjects SET name = ?, status = ?, notes = ?,"
+        " completed_at = CASE WHEN ? = 'concluida' THEN COALESCE(completed_at, ?) END"
+        " WHERE id = ?",
+        (as_text(request.form.get("name"), max_length=120), status,
+         as_text(request.form.get("notes")), status, today_iso(), subject_id))
     flash("Assunto atualizado.", "success")
     return redirect(url_for("disciplines.detail", discipline_id=row["discipline_id"]))
 

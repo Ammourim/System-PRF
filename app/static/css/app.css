@@ -495,3 +495,44 @@ body.focus-mode .sidebar, body.focus-mode .topbar { display: none; }
   .page { padding: 0; }
   .card { box-shadow: none; break-inside: avoid; }
 }
+
+/* ==========================================================================
+   HOJE - tela inicial simplificada
+   O objetivo visual e um so: revisoes e objetivos do dia tem de saltar aos
+   olhos; todo o resto e discreto.
+   ========================================================================== */
+.card.hoje { padding: 18px 20px; margin-bottom: 18px; border-color: var(--border-strong); }
+.card.hoje.alerta { border-color: var(--bad); background: linear-gradient(180deg, var(--bad-soft), var(--surface) 60%); }
+.card-title.big { font-size: 15px; text-transform: none; letter-spacing: 0; font-weight: 650;
+  color: var(--text); }
+.list-item .name.big { font-size: 16px; font-weight: 600; }
+.list-item .sub .badge { margin-right: 6px; }
+.card.hoje .list-item { padding: 12px 0; }
+.card.hoje .btn.primary { min-width: 104px; justify-content: center; }
+
+/* ------------------------------------------------------- telas de formulario */
+.form-card { max-width: 620px; }
+.center-card { margin: 0 auto; text-align: left; }
+.center-card .title.big { font-size: 24px; font-weight: 650; letter-spacing: -.02em;
+  margin: 2px 0 10px; }
+.center-card .eyebrow { font-size: 10.5px; text-transform: uppercase; letter-spacing: .1em;
+  color: var(--accent); font-weight: 700; }
+.center-card .question { font-size: 17px; font-weight: 600; margin: 14px 0 6px; }
+.readonly-value { font-size: 17px; font-weight: 600; padding: 6px 0; }
+.finish-check { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
+.inline-field { display: flex; align-items: center; gap: 6px; margin: 0; }
+.inline-field label { font-size: 11px; color: var(--text-3); text-transform: uppercase;
+  letter-spacing: .06em; margin: 0; }
+
+/* --------------------------------------------------------------- navegacao */
+.nav.principal a { font-size: 14px; font-weight: 600; padding: 9px 10px; }
+.nav-extra { margin-top: 6px; }
+.nav-extra > summary { cursor: pointer; font-size: 11px; text-transform: uppercase;
+  letter-spacing: .07em; color: var(--text-3); padding: 4px 8px; }
+.nav-extra[open] > summary { color: var(--text-2); }
+
+/* ------------------------------------------------------------------ detalhes */
+details.box > summary { cursor: pointer; font-size: 13px; color: var(--text-2);
+  padding: 4px 0; }
+details.box[open] > summary { color: var(--text); font-weight: 550; }
+td.center, th.center { text-align: center; }

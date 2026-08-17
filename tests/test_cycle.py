@@ -18,11 +18,10 @@ def test_spread_intercala_disciplinas():
 
 
 def test_spread_nao_repete_disciplina_em_sequencia_no_plano_real(ctx):
-    """O ciclo V1 (14 disciplinas, 27 blocos) nao pode ter dois blocos iguais seguidos."""
-    rows = query_all("SELECT id, name, block_minutes, target_minutes FROM disciplines"
-                     " WHERE active = 1")
+    """O ciclo inicial (14 disciplinas, 26 blocos) nao pode ter dois blocos iguais seguidos."""
+    rows = query_all("SELECT * FROM disciplines WHERE active = 1")
     ordered = cycle_service.spread(cycle_service.plan_from_disciplines(rows))
-    assert len(ordered) == 27
+    assert len(ordered) == 26
     repetidos = [i for i in range(1, len(ordered))
                  if ordered[i]["discipline_id"] == ordered[i - 1]["discipline_id"]]
     assert repetidos == []
@@ -44,15 +43,19 @@ def test_spread_ignora_count_zero():
     assert cycle_service.spread(plan) == []
 
 
-def test_plan_from_disciplines_arredonda_blocos():
+def test_plan_from_disciplines_respeita_a_meta_de_cada_disciplina():
+    """Sem round() silencioso: o tempo planejado bate com a meta declarada."""
     rows = [
         {"id": 1, "name": "CTB", "block_minutes": 90, "target_minutes": 420},
         {"id": 2, "name": "DH", "block_minutes": 45, "target_minutes": 60},
         {"id": 3, "name": "Fora", "block_minutes": 60, "target_minutes": 0},
     ]
     plan = cycle_service.plan_from_disciplines(rows)
-    assert [p["count"] for p in plan] == [5, 1]  # 420/90 -> 5 ; 60/45 -> 1
-    assert len(plan) == 2  # meta 0 fica fora do ciclo
+    assert len(plan) == 2  # meta 0 e sem contato minimo fica fora do ciclo
+    by_name = {p["name"]: p for p in plan}
+    assert sum(by_name["CTB"]["block_list"]) == 420    # antes: 5 x 90 = 450 (+30)
+    assert sum(by_name["DH"]["block_list"]) == 60      # antes: 1 x 45 = 45  (-15)
+    assert all(p["diff"] == 0 for p in plan)
 
 
 def test_ciclo_inicial_criado_no_start(ctx):

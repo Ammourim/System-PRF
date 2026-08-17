@@ -5,6 +5,7 @@ from __future__ import annotations
 from flask import request
 
 from ..db import insert, query_all, query_one
+from ..services.cycle import DEFAULT_PRIORITY, PRIORITIES, PRIORITY_ORDER  # noqa: F401
 from ..utils import as_opt_int, as_text
 
 SESSION_TYPES = {
@@ -33,14 +34,26 @@ DISCIPLINE_STATUS = {
     "consolidada": "Consolidada",
 }
 
-PRIORITIES = {"maxima": "Maxima", "base": "Base", "complementar": "Complementar"}
+# PRIORITIES / PRIORITY_ORDER vivem em services/cycle.py: prioridade agora e uma
+# regra do ciclo, nao apenas um rotulo de tela.
+
+# Ordena por prioridade antes de qualquer outra coisa (mesma regra do ciclo).
+_PRIORITY_SQL = ("CASE d.priority " +
+                 " ".join(f"WHEN '{key}' THEN {rank}"
+                          for key, rank in PRIORITY_ORDER.items()) +
+                 f" ELSE {PRIORITY_ORDER[DEFAULT_PRIORITY]} END")
+
+
+def priority_sql(alias: str = "d") -> str:
+    """Expressao SQL que ordena pela prioridade do ciclo."""
+    return _PRIORITY_SQL.replace("d.priority", f"{alias}.priority")
 
 
 def disciplines(active_only: bool = True) -> list:
-    sql = "SELECT * FROM disciplines"
+    sql = "SELECT * FROM disciplines d"
     if active_only:
         sql += " WHERE active = 1"
-    sql += " ORDER BY incidence DESC, name"
+    sql += f" ORDER BY {priority_sql()}, incidence DESC, name"
     return query_all(sql)
 
 

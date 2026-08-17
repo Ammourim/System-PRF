@@ -9,7 +9,7 @@ from ..services import adaptive
 from ..services import cycle as cycle_service
 from ..services import settings as settings_service
 from ..utils import as_bool, as_int, as_opt_int, as_text, parse_minutes, today_iso
-from .common import disciplines, redirect_target, subjects
+from .common import DISCIPLINE_STATUS, PRIORITIES, disciplines, redirect_target, subjects
 
 bp = Blueprint("cycles", __name__, url_prefix="/ciclo")
 
@@ -33,36 +33,62 @@ def index():
     )
 
 
+def _save_discipline_row(row) -> None:
+    """Grava o que o usuario editou na tela de montagem. Decisao manual vence."""
+    did = row["id"]
+    values = {
+        "target_minutes": parse_minutes(request.form.get(f"target_{did}"),
+                                        row["target_minutes"]),
+        "block_minutes": max(5, parse_minutes(request.form.get(f"block_{did}"),
+                                              row["block_minutes"])),
+        "desired_blocks": max(0, as_int(request.form.get(f"desired_{did}"),
+                                        row["desired_blocks"])),
+        "min_blocks": max(0, as_int(request.form.get(f"min_{did}"), row["min_blocks"])),
+    }
+    # Checkbox nao enviado != desmarcado: so mexe em `active` se a linha veio no
+    # formulario (campo oculto `row_<id>`). Evita desativar tudo num POST parcial.
+    if f"row_{did}" in request.form:
+        values["active"] = as_bool(request.form.get(f"active_{did}"))
+    priority = request.form.get(f"priority_{did}")
+    if priority in PRIORITIES:
+        values["priority"] = priority
+    execute("UPDATE disciplines SET " + ", ".join(f"{k} = ?" for k in values) + " WHERE id = ?",
+            (*values.values(), did))
+
+
 @bp.route("/montar", methods=["GET", "POST"])
 def build():
     """Monta o plano do proximo ciclo. Tudo editavel antes de gerar."""
-    rows = disciplines()
+    rows = disciplines(active_only=False)
     if request.method == "POST":
-        plan = []
         for row in rows:
-            target = parse_minutes(request.form.get(f"target_{row['id']}"), 0)
-            block = parse_minutes(request.form.get(f"block_{row['id']}"), row["block_minutes"])
-            block = max(5, block)
-            execute(
-                "UPDATE disciplines SET target_minutes = ?, block_minutes = ? WHERE id = ?",
-                (target, block, row["id"]))
-            if target > 0:
-                plan.append({
-                    "discipline_id": row["id"],
-                    "name": row["name"],
-                    "block_minutes": block,
-                    "target_minutes": target,
-                    "count": max(1, int(target / block + 0.5)),
-                })
-        if not plan:
-            flash("Defina pelo menos uma disciplina com meta maior que zero.", "error")
-            return redirect(url_for("cycles.build"))
+            _save_discipline_row(row)
+        rows = disciplines(active_only=False)
 
         goal = parse_minutes(request.form.get("goal_minutes"),
                              settings_service.get_int("prf_goal_minutes", 1800))
         goal_questions = as_int(request.form.get("goal_questions"),
                                 settings_service.get_int("questions_goal_per_cycle", 350))
         days = as_int(request.form.get("days"), settings_service.get_int("cycle_days", 14))
+
+        result = cycle_service.generate_cycle_plan(
+            rows, goal_minutes=goal, config=cycle_service.block_config())
+        plan = result["plan"]
+
+        # Recalcular = so mostrar a previa com os valores salvos, sem gerar nada.
+        if as_bool(request.form.get("preview_only")):
+            flash("Previa recalculada com os valores salvos. Nada foi gerado ainda.",
+                  "success")
+            return redirect(url_for("cycles.build"))
+
+        if not plan:
+            flash("Defina pelo menos uma disciplina com meta maior que zero"
+                  " (ou um contato minimo de blocos).", "error")
+            return redirect(url_for("cycles.build"))
+
+        # Divergencia contra a meta e avisada, nunca corrigida por conta propria.
+        for message in result["warnings"]:
+            flash(message, "error" if not result["within_tolerance"] else "success")
 
         if as_bool(request.form.get("rebuild_current")):
             cycle = cycle_service.active_cycle()
@@ -84,19 +110,24 @@ def build():
             flash(f"Novo ciclo criado com {total} blocos.", "success")
         return redirect(url_for("cycles.index"))
 
-    preview_plan = cycle_service.spread(cycle_service.plan_from_disciplines(rows))
-    planned_minutes = sum(int(i["block_minutes"]) for i in preview_plan)
+    goal_minutes = settings_service.get_int("prf_goal_minutes", 1800)
+    result = cycle_service.generate_cycle_plan(
+        disciplines(active_only=False), goal_minutes=goal_minutes,
+        config=cycle_service.block_config())
     return render_template(
         "cycles/build.html",
-        disciplines=rows,
-        preview=preview_plan,
-        planned_minutes=planned_minutes,
-        goal_minutes=settings_service.get_int("prf_goal_minutes", 1800),
+        disciplines=result["items"],
+        plan=result,
+        preview=result["sequence"],
+        planned_minutes=result["total_minutes"],
+        goal_minutes=goal_minutes,
         goal_questions=settings_service.get_int("questions_goal_per_cycle", 350),
         days=settings_service.get_int("cycle_days", 14),
         block_sizes=settings_service.block_sizes(),
         capacity=cycle_service.estimated_capacity(),
         has_active=cycle_service.active_cycle() is not None,
+        priorities=PRIORITIES,
+        statuses=DISCIPLINE_STATUS,
     )
 
 
