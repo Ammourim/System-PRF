@@ -263,6 +263,18 @@ cd ~/System-PRF && git pull && .venv/bin/pip install -r requirements.txt
 
 Depois clique em **Reload** na aba **Web**. Migrations de banco sao aplicadas sozinhas.
 
+> **Se o site continuar mostrando o codigo antigo depois do Reload** (ja aconteceu): o
+> botao as vezes nao reinicia o processo e nao avisa. O jeito que sempre funciona e
+> mudar a data do arquivo WSGI - o PythonAnywhere recarrega quando ela muda:
+>
+> ```bash
+> touch /var/www/$(whoami)_pythonanywhere_com_wsgi.py
+> ```
+>
+> Para conferir qual codigo esta no ar, sem cair em cache do navegador, abra o site com
+> um parametro qualquer no fim (`?v=2`) e veja o menu: a versao nova comeca com **Hoje**,
+> a antiga com **Painel**.
+
 ## Manutencao
 
 | Quando | O que fazer |
