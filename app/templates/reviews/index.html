@@ -32,6 +32,10 @@
               {% else %}
                 <span class="text-warn strong">Vence hoje</span>
               {% endif %}
+              {% if r.accuracy is not none %}
+                <span class="dim">&middot; {{ r.questions_total }} questoes ate aqui
+                ({{ r.accuracy|round(0)|int }}%)</span>
+              {% endif %}
             </div>
           </div>
           <a class="btn primary" href="{{ url_for('reviews.detail', review_id=r.id) }}">Revisar</a>

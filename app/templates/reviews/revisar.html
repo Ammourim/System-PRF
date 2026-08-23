@@ -38,6 +38,18 @@
         A proxima revisao e contada a partir desta data - nao da data que estava prevista.
       </div>
     </div>
+    <div class="field">
+      <label>Revisei fazendo questoes</label>
+      <div class="row tight">
+        <input type="number" name="questions_total" min="0" step="1" placeholder="Quantas questoes">
+        <input type="number" name="questions_correct" min="0" step="1" placeholder="Quantas acertei">
+      </div>
+      <div class="tiny dim">
+        Opcional. Preenchendo, as questoes entram no desempenho, nos pontos
+        fracos e nas sugestoes - do mesmo jeito que um registro avulso.
+      </div>
+    </div>
+
     <div class="form-actions">
       <button class="btn primary big" type="submit">Concluir revisao</button>
       <a class="btn ghost" href="{{ url_for('dashboard.index') }}">Voltar</a>
@@ -59,6 +71,10 @@
   <div class="tiny dim mt">
     Sequencia completa: {% for i in intervals %}<span class="badge">D{{ i }}</span> {% endfor %}
     {% if review.times_done %} &middot; ja concluida {{ review.times_done }}x{% endif %}
+    {% if review.questions_total %}
+      &middot; {{ review.questions_total }} questoes nesta fila
+      ({{ review.questions_correct }} certas &middot; {{ review.accuracy|round(0)|int }}%)
+    {% endif %}
   </div>
 </section>
 {% endblock %}

@@ -75,6 +75,10 @@ intervalos), `interval_days`, `difficulty` (legado: nao afeta mais nenhum calcul
 (`questoes|flashcards|recuperacao_ativa|releitura|caderno_erros|mista`),
 `status` (`pendente|concluida|arquivada`; `concluida` = percorreu a sequencia inteira,
 assunto consolidado), `last_done_at`, `times_done`.
+`questions_total` e `questions_correct` guardam o acumulado das questoes feitas nas
+revisoes daquela fila (migration 006). O registro em si vai para `questions` com
+`kind = 'revisao'` e `source = 'Revisao D7'`, entao desempenho, pontos fracos e
+sugestoes adaptativas enxergam a revisao sem nenhum calculo novo.
 Regra: proxima data = `last_done_at` real + proximo intervalo. Atraso nunca duplica
 linha, e a sequencia termina no ultimo intervalo da lista.
 Indice `(status, next_date)` - e a consulta mais frequente do sistema.

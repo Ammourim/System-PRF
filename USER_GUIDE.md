@@ -80,13 +80,18 @@ fila com metodo "caderno de erros".
 
 Uma fila, nao um calendario. Ela mostra atrasadas e de hoje; o resto fica em "proximas".
 
-Ao concluir, informe **dificuldade** e **metodo**. O proximo intervalo sai da lista
-configurada (padrao `1, 7, 15, 30, 60` dias), ajustado pela dificuldade: facil alonga,
-dificil encurta. Voce pode adiar (+1/+3 dias), editar a data na mao, arquivar como
-consolidado e reativar depois.
+Ao concluir, confirme a **data real** em que voce revisou. O proximo intervalo sai da
+lista configurada (padrao `1, 7, 15, 30, 60` dias), contado a partir dessa data - sem
+multiplicador e sem dificuldade. Voce pode adiar (+1 dia), editar a data na mao, arquivar
+como consolidado e reativar depois. Depois do ultimo intervalo o assunto e consolidado e
+sai da fila.
 
-Revisar nao e reler: registre o metodo real (questoes, flashcards, recuperacao ativa,
-releitura, caderno de erros, mista).
+**Revisei fazendo questoes.** Na mesma tela da revisao ha dois campos opcionais: quantas
+questoes voce resolveu e quantas acertou. Preenchendo, o sistema cria um registro de
+questoes do tipo "revisao" naquela disciplina e assunto - o mesmo dado que alimenta
+desempenho, pontos fracos e sugestoes adaptativas. Nao e preciso abrir o modulo de
+Questoes e lancar de novo. Deixar em branco nao muda nada: a revisao vale do mesmo jeito.
+O acumulado de cada fila aparece na lista ("20 questoes ate aqui (85%)").
 
 ## Simulados
 

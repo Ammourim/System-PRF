@@ -67,17 +67,31 @@ def create():
 
 @bp.route("/<int:review_id>/concluir", methods=["POST"])
 def complete(review_id: int):
-    """Conclui a revisao na data REAL e agenda a proxima da sequencia."""
+    """Conclui a revisao na data REAL e agenda a proxima da sequencia.
+
+    Quando a revisao foi feita com questoes, os numeros informados viram um
+    registro de questoes (kind='revisao') e entram no desempenho normalmente.
+    """
     result = reviews_service.complete_review(
-        review_id, done_date=as_text(request.form.get("done_date"), today_iso()))
+        review_id,
+        done_date=as_text(request.form.get("done_date"), today_iso()),
+        questions_total=as_int(request.form.get("questions_total"), 0),
+        questions_correct=as_int(request.form.get("questions_correct"), 0),
+    )
     if not result:
         flash("Revisao nao encontrada.", "error")
-    elif result["finished"]:
-        flash("Revisao final concluida. Assunto consolidado - a sequencia terminou.",
-              "success")
+        return redirect(redirect_target(url_for("dashboard.index")))
+
+    extra = ""
+    if result.get("questions"):
+        extra = (f" {result['questions']} questoes registradas"
+                 f" ({result['accuracy']:.0f}% de acerto).")
+    if result["finished"]:
+        flash("Revisao final concluida. Assunto consolidado - a sequencia terminou."
+              + extra, "success")
     else:
         flash(f"Revisao concluida. Proxima ({result['label']}) em"
-              f" {date_br(result['next_date'])}.", "success")
+              f" {date_br(result['next_date'])}.{extra}", "success")
     return redirect(redirect_target(url_for("dashboard.index")))
 
 

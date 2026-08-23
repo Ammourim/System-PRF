@@ -84,6 +84,8 @@ disciplina. Nao existe agenda nem calendario.
 ```
 abrir o sistema
   -> REVISOES DE HOJE  (vermelho quando atrasada)  -> [ REVISAR ] -> [ CONCLUIR REVISAO ]
+                                                    (questoes resolvidas / certas:
+                                                     opcional, entra no desempenho)
   -> ESTUDAR           (objetivos do dia)          -> [ ESTUDAR ] -> assunto + tempo + obs
                                                                     (tempo e obs opcionais)
   -> ASSUNTOS EM ANDAMENTO -> [ Terminei este assunto ]
@@ -98,7 +100,10 @@ abrir o sistema
 - atraso nao duplica nada: a mesma linha continua vencida, mostrando
   "Atrasada ha N dias";
 - concluir a ultima (D60) consolida o assunto e encerra a sequencia;
-- concluir o mesmo assunto duas vezes nao cria duas filas.
+- concluir o mesmo assunto duas vezes nao cria duas filas;
+- revisou fazendo questoes? informe quantas e quantas acertou ao concluir: vira um
+  registro em `questions` com `kind='revisao'` (migration 006) e entra em desempenho,
+  pontos fracos e sugestoes. Continua opcional - revisao sem questoes vale igual.
 
 ### Rotas novas
 

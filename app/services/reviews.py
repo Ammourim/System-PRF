@@ -20,7 +20,7 @@ from __future__ import annotations
 import sqlite3
 
 from ..db import execute, insert, query_all, query_one, scalar
-from ..utils import add_days, days_between, today_iso
+from ..utils import add_days, days_between, percentage, today_iso
 from . import settings as settings_service
 from .cycle import DEFAULT_PRIORITY, PRIORITY_ORDER
 
@@ -115,8 +115,44 @@ def create_for_subject(discipline_id: int, subject_id: int, title: str = "",
 # --------------------------------------------------------------------------
 # Conclusao
 # --------------------------------------------------------------------------
+def register_questions(review, total: int, correct: int, done_date: str | None = None,
+                       notes: str = "") -> int | None:
+    """Guarda as questoes feitas na revisao e devolve o id do registro.
+
+    Grava na tabela `questions` (kind='revisao') para entrar nos calculos do
+    sistema, e soma no acumulado da propria revisao. Total <= 0 nao registra
+    nada - questoes na revisao sao opcionais.
+    """
+    total = max(0, int(total or 0))
+    if total <= 0:
+        return None
+    correct = max(0, min(int(correct or 0), total))
+    done = done_date or today_iso()
+    subject_name = None
+    try:
+        subject_name = review["subject_name"]
+    except (KeyError, IndexError, TypeError):
+        subject_name = None
+    question_id = insert(
+        "INSERT INTO questions (date, discipline_id, subject_id, total, correct, wrong,"
+        " percentage, banca, source, kind, notes)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, '', ?, 'revisao', ?)",
+        (done, review["discipline_id"], review["subject_id"], total, correct,
+         total - correct, percentage(correct, total),
+         f"Revisao {label(review['interval_days'])}"[:120],
+         notes or (subject_name or review["title"] or "")),
+    )
+    execute(
+        "UPDATE reviews SET questions_total = questions_total + ?,"
+        " questions_correct = questions_correct + ? WHERE id = ?",
+        (total, correct, review["id"]),
+    )
+    return question_id
+
+
 def complete_review(review_id: int, difficulty: str | None = None, method: str | None = None,
-                    done_date: str | None = None, notes: str | None = None) -> dict:
+                    done_date: str | None = None, notes: str | None = None,
+                    questions_total: int = 0, questions_correct: int = 0) -> dict:
     """Conclui a revisao e agenda a proxima da sequencia.
 
     Sem multiplicador, sem dificuldade, sem excecao: proxima data = data real da
@@ -128,6 +164,9 @@ def complete_review(review_id: int, difficulty: str | None = None, method: str |
         return {}
 
     done = done_date or today_iso()
+    questoes = register_questions(review, questions_total, questions_correct, done_date=done)
+    accuracy = (percentage(min(max(0, int(questions_correct or 0)), int(questions_total or 0)),
+                           int(questions_total or 0)) if questoes else None)
     values = intervals()
     next_step = int(review["step"]) + 1
 
@@ -144,6 +183,8 @@ def complete_review(review_id: int, difficulty: str | None = None, method: str |
             "interval_days": 0,
             "next_date": None,
             "label": label(review["interval_days"]),
+            "questions": max(0, int(questions_total or 0)) if questoes else 0,
+            "accuracy": accuracy,
         }
 
     interval = values[next_step]
@@ -160,6 +201,8 @@ def complete_review(review_id: int, difficulty: str | None = None, method: str |
         "interval_days": interval,
         "next_date": next_date,
         "label": label(interval),
+        "questions": max(0, int(questions_total or 0)) if questoes else 0,
+        "accuracy": accuracy,
     }
 
 
@@ -190,6 +233,9 @@ def _decorate(rows: list[sqlite3.Row], reference: str) -> list[dict]:
     for row in rows:
         data = dict(row)
         data["label"] = label(row["interval_days"])
+        total_q = int(data.get("questions_total") or 0)
+        data["accuracy"] = (percentage(int(data.get("questions_correct") or 0), total_q)
+                            if total_q else None)
         data["late_days"] = max(0, days_between(row["next_date"], reference))
         if row["next_date"] < reference:
             data["urgency"] = "atrasada"
