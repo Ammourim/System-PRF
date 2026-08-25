@@ -122,8 +122,27 @@ exercicio, e as que estavam `concluido` viram tambem uma sessao concluida - pres
 contagem do relatorio de ciclo. `tests/test_migration_002.py` exercita essa conversao com
 dados reais.
 
-### `college_subjects`, `college_tasks`, `college_sessions`
+### `college_subjects`, `college_topics`, `college_tasks`, `college_sessions`
 Faculdade, com planejamento independente do ciclo PRF.
+
+`college_topics` (migration 007) e o **tema** - a unidade de conteudo da faculdade, o
+equivalente de `subjects` no lado PRF. `position` e a ordem dentro da disciplina,
+`planned_date` e a data sugerida pelo plano (**reescrita a cada recalculo**, nunca editada
+a mao) e `completed_at` marca a conclusao, que e o que abre a revisao.
+`UNIQUE (college_subject_id, name)` impede tema repetido.
+
+`college_sessions.college_topic_id` (opcional) amarra o tempo estudado ao tema. Registro
+sem tema continua valido, e registrar tempo **nao** conclui o tema.
+
+### `college_reviews`
+Fila de revisao espacada da faculdade (migration 007). Mesmas colunas e mesma regra de
+`reviews` - `origin_date`, `next_date`, `step`, `interval_days`, `status`, `last_done_at`,
+`times_done` - com os intervalos de `college_review_intervals` (padrao 1,7,15,30).
+
+Tabela **separada** de `reviews` de proposito: `reviews.discipline_id` e NOT NULL e aponta
+para as disciplinas do edital. Misturar as duas filas colocaria conteudo de faculdade no
+desempenho, nos pontos fracos e na tela HOJE do concurso.
+Indice `(status, next_date)` - a consulta da fila do dia.
 
 ## Diagrama de relacoes
 
@@ -136,7 +155,9 @@ disciplines ──< subjects
      └──< reviews
 
 taf_tests ──< taf_measurements          college_subjects ──< college_tasks
-taf_workouts (independente)                              └──< college_sessions
+taf_workouts (independente)                              ├──< college_sessions
+                                                         ├──< college_topics
+                                                         └──< college_reviews
 ```
 
 ## Criando uma migration

@@ -7,7 +7,7 @@ from flask import Blueprint, current_app, flash, redirect, render_template, requ
 from ..db import get_db
 from ..seed import clear_demo, has_demo, seed_demo
 from ..services import settings as settings_service
-from ..utils import as_float, as_int, as_text, parse_minutes
+from ..utils import as_float, as_int, as_text, parse_date, parse_minutes, to_iso
 
 bp = Blueprint("settings", __name__, url_prefix="/configuracoes")
 
@@ -59,9 +59,13 @@ def save():
         if key in request.form:
             values[key] = convert(request.form.get(key))
 
-    if "review_intervals" in request.form:
+    # Listas de intervalos (PRF e faculdade): mesma validacao, listas separadas.
+    for key, rotulo in (("review_intervals", "revisao"),
+                        ("college_review_intervals", "revisao da faculdade")):
+        if key not in request.form:
+            continue
         parsed = []
-        for part in as_text(request.form.get("review_intervals")).split(","):
+        for part in as_text(request.form.get(key)).split(","):
             part = part.strip()
             if not part:
                 continue
@@ -69,9 +73,18 @@ def save():
             if value > 0:
                 parsed.append(value)
         if parsed:
-            values["review_intervals"] = ",".join(str(v) for v in parsed)
+            values[key] = ",".join(str(v) for v in parsed)
         else:
-            flash("Intervalos de revisao invalidos - mantive os anteriores.", "error")
+            flash(f"Intervalos de {rotulo} invalidos - mantive os anteriores.", "error")
+
+    # Prazo da faculdade: data ISO. Vazio ou invalido nao apaga o que existe.
+    deadline = as_text(request.form.get("college_deadline"))
+    if deadline:
+        # Estrito: data que nao e ISO valida cairia em "hoje" e apagaria o prazo.
+        if to_iso(parse_date(deadline)) == deadline:
+            values["college_deadline"] = deadline
+        else:
+            flash("Prazo da faculdade invalido - mantive o anterior.", "error")
 
     frequency = request.form.get("mock_frequency")
     if frequency in MOCK_FREQUENCIES:

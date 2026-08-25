@@ -41,7 +41,10 @@
       <div class="nav-group-title">Fora do PRF</div>
       <nav class="nav">
         <a href="{{ url_for('taf.index') }}" class="{{ 'active' if nav_active == 'taf' }}">TAF</a>
-        <a href="{{ url_for('college.index') }}" class="{{ 'active' if nav_active == 'college' }}">Faculdade</a>
+        <a href="{{ url_for('college.index') }}" class="{{ 'active' if nav_active == 'college' }}">
+          Faculdade
+          {% if college_badge %}<span class="badge accent">{{ college_badge }}</span>{% endif %}
+        </a>
       </nav>
     </div>
 

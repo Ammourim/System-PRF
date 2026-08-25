@@ -41,6 +41,11 @@ DEFAULTS: dict[str, str] = {
     # TAF e faculdade
     "taf_minutes_per_cycle": "420",      # ~7h
     "college_hours_per_week": "4",
+    # Faculdade: prazo para terminar TODO o conteudo e intervalos da revisao.
+    # Os intervalos sao mais curtos que os do PRF de proposito - a faculdade tem
+    # data para acabar, uma revisao D60 cairia depois do prazo.
+    "college_deadline": "2026-10-25",
+    "college_review_intervals": "1,7,15,30",
     # Limiares de desempenho (usados nas cores e nas sugestoes)
     "performance_low": "60",
     "performance_mid": "70",

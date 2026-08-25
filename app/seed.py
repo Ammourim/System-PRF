@@ -51,6 +51,42 @@ TAF_TESTS = [
     ("Abdominal (1 min)", "repeticoes", 1, None, 40.0),
 ]
 
+# Faculdade: disciplinas do semestre e os TEMAS de cada uma, na ordem em que o
+# conteudo e dado. `True` marca o que ja foi estudado antes do sistema existir -
+# esse tema entra como concluido e ja nasce com a fila de revisao aberta.
+#
+# (nome da disciplina, [(tema, ja_estudado), ...])
+COLLEGE_SUBJECTS: list[tuple[str, list[tuple[str, bool]]]] = [
+    ("Qualidade e Testes de Software", [
+        ("Tema 1 - Modelos de Ciclo de Vida de Software", False),
+        ("Tema 2 - Processo do Teste de Software e Seus Principios", False),
+        ("Tema 3 - Estrategias e Planejamento de Teste de Software", False),
+        ("Tema 4 - Gestao de Defeitos e Plano de Teste", False),
+    ]),
+    ("Programacao para Dispositivos Moveis em Android", [
+        ("Tema 2 - Sintaxe e Componentes do React Native", True),
+        ("Tema 3 - Interface Grafica com React Native", False),
+        ("Tema 4 - Persistencia de Dados com React Native", False),
+        ("Tema 5 - Conexao Remota com React Native", False),
+        ("Tema 6 - Topicos Avancados em React Native", False),
+    ]),
+    ("Banco de Dados NoSQL", [(f"Tema {n}", n <= 2) for n in range(1, 12)]),
+    ("Desenvolvimento de Back-end", [
+        ("Tema 1 - Tecnologias de Transmissao de Dados em Sistemas Web", True),
+        ("Tema 2 - Programacao Servidor com Java", False),
+        ("Tema 3 - Persistencia com Spring Data", False),
+        ("Tema 4 - Servicos de Mensageria", False),
+        ("Tema 5 - Web Services em Java", False),
+    ]),
+    ("Linhas de Produtos de Software", [
+        ("Tema 1 - Conceitos de Linhas de Produtos de Software (LPS)", False),
+        ("Tema 2 - Variabilidade em LPS", False),
+        ("Tema 3 - Engenharia do Dominio", False),
+        ("Tema 4 - Engenharia da Aplicacao", False),
+    ]),
+]
+
+
 DEMO_SUBJECTS: dict[str, list[str]] = {
     "CTB": ["Infracoes", "Penalidades e medidas administrativas", "Sinalizacao",
             "Habilitacao", "Normas gerais de circulacao"],
@@ -75,6 +111,7 @@ def ensure_base_data(conn: sqlite3.Connection) -> None:
     _ensure_settings(conn)
     _ensure_disciplines(conn)
     _ensure_taf_tests(conn)
+    _ensure_college(conn)
     _ensure_first_cycle(conn)
     conn.commit()
 
@@ -117,6 +154,42 @@ def _ensure_taf_tests(conn: sqlite3.Connection) -> None:
             (name, unit, higher, current, goal,
              "Meta de referencia - ajustar quando o edital sair."),
         )
+
+
+def _ensure_college(conn: sqlite3.Connection) -> None:
+    """Disciplinas e temas da faculdade do semestre.
+
+    Idempotente por NOME, nao por "a tabela esta vazia": rodar de novo depois de
+    cadastrar disciplina a mao nao duplica nada e nao apaga nada. Tema ja
+    estudado antes do sistema entra concluido e ja abre a fila de revisao - o
+    conteudo nao precisa ser re-estudado, mas precisa ser revisado ate a prova.
+    """
+    from .services import college as college_service
+
+    for name, temas in COLLEGE_SUBJECTS:
+        row = conn.execute("SELECT id FROM college_subjects WHERE name = ?",
+                           (name,)).fetchone()
+        if row is None:
+            subject_id = conn.execute(
+                "INSERT INTO college_subjects (name) VALUES (?)", (name,)).lastrowid
+        else:
+            subject_id = row["id"]
+        for position, (tema, estudado) in enumerate(temas, start=1):
+            existing = conn.execute(
+                "SELECT id FROM college_topics WHERE college_subject_id = ? AND name = ?",
+                (subject_id, tema)).fetchone()
+            if existing is not None:
+                continue
+            status = "concluido" if estudado else "pendente"
+            topic_id = conn.execute(
+                "INSERT INTO college_topics (college_subject_id, name, position, status,"
+                " completed_at) VALUES (?, ?, ?, ?, ?)",
+                (subject_id, tema, position, status,
+                 to_iso(today_date()) if estudado else None)).lastrowid
+            if estudado:
+                college_service.create_review(subject_id, topic_id, tema, conn=conn)
+    conn.commit()
+    college_service.plan(conn=conn)
 
 
 def _ensure_first_cycle(conn: sqlite3.Connection) -> None:

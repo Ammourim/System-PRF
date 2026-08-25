@@ -3,9 +3,257 @@
 
 {% block title %}Faculdade - Sistema PRF{% endblock %}
 {% block heading %}Faculdade{% endblock %}
-{% block subtitle %}<div class="subtitle">Planejamento independente do ciclo PRF. Meta atual: {{ goal_minutes|minutes }} por semana.</div>{% endblock %}
+{% block subtitle %}<div class="subtitle">Ciclo e revisoes proprios, separados do PRF. Todo o conteudo ate {{ progress.deadline|date_br }}.</div>{% endblock %}
 
 {% block content %}
+
+{# ---------------------------------------------------------------- 1. O QUE ESTUDAR #}
+<section class="card">
+  <div class="card-head">
+    <div class="card-title">Estude agora</div>
+    <div class="spacer"></div>
+    <span class="tiny dim">{{ progress.done }} de {{ progress.total }} temas &middot;
+      faltam {{ progress.days_left }} dia(s) para o prazo</span>
+  </div>
+
+  {% if current_topic %}
+    <div class="row tight">
+      <div class="grow">
+        <div class="name big">{{ current_topic.name }}</div>
+        <div class="sub">{{ current_topic.subject_name }}</div>
+      </div>
+      {% if current_topic.chosen %}
+        <span class="badge accent">escolhido por voce para hoje</span>
+      {% else %}
+        <span class="badge {{ 'bad' if progress.late else ('warn' if progress.tight else 'accent') }}">
+          previsto para {{ current_topic.planned_date|date_br }}
+        </span>
+      {% endif %}
+    </div>
+
+    <form method="post" action="{{ url_for('college.complete_topic', topic_id=current_topic.id) }}" class="mt">
+      <input type="hidden" name="next" value="{{ request.full_path }}">
+      <div class="form-grid cols-3">
+        <div class="field"><label for="done_date">Concluido em</label>
+          <input type="date" id="done_date" name="done_date" value="{{ today }}"></div>
+        <div class="field"><label for="topic_minutes">Tempo estudado (min)</label>
+          <input type="text" id="topic_minutes" name="minutes" placeholder="opcional"></div>
+        <div class="field"><label for="topic_notes">Observacao</label>
+          <input type="text" id="topic_notes" name="notes" placeholder="opcional"></div>
+      </div>
+      <div class="form-actions">
+        <button class="btn primary big" type="submit">Concluir tema e agendar revisao</button>
+      </div>
+      <div class="tiny dim">
+        Concluir e o marco que abre a revisao espacada
+        ({% for i in review_intervals %}<span class="badge">D{{ i }}</span> {% endfor %}).
+        Registrar tempo, sozinho, nao conclui nada.
+      </div>
+    </form>
+  {% else %}
+    <div class="empty">Nenhum tema pendente - todo o conteudo esta concluido.</div>
+  {% endif %}
+
+  <div class="mt">
+    {{ progress_bar(progress.done, progress.total) }}
+    <div class="tiny dim mt">
+      {% if progress.pending %}
+        Ritmo necessario: <strong>{{ progress.per_week }} tema(s) por semana</strong>
+        (um tema a cada {{ progress.days_per_topic }} dia(s)).
+        {% if progress.late %}<span class="text-bad">O prazo ja passou com {{ progress.pending }} tema(s) em aberto.</span>
+        {% elif progress.tight %}<span class="text-warn">Sao {{ progress.pending }} temas para {{ progress.days_left }} dias - mais de um por dia.</span>{% endif %}
+      {% else %}
+        Conteudo completo. Daqui para a frente so revisao.
+      {% endif %}
+    </div>
+  </div>
+</section>
+
+{# ---------------------------------------------------------------- 2. O QUE REVISAR #}
+<section class="card">
+  <div class="card-head">
+    <div class="card-title">Revisoes de hoje</div>
+    <div class="spacer"></div>
+    <span class="tiny dim">
+      {{ review_counts.due }} para hoje &middot; {{ review_counts.late }} atrasada(s) &middot;
+      {{ review_counts.total }} na fila &middot; {{ review_counts.consolidated }} consolidada(s)
+    </span>
+  </div>
+  <div class="list">
+    {% for r in reviews_due %}
+      <div class="list-item">
+        <span class="badge {{ 'bad' if r.urgency == 'atrasada' else 'warn' }}">{{ r.label }}</span>
+        <div class="grow">
+          <div class="name">{{ r.name }}</div>
+          <div class="sub">{{ r.subject_name }}
+            {% if r.urgency == 'atrasada' %}&middot; atrasada ha {{ r.late_days }} dia(s){% endif %}</div>
+        </div>
+        <form method="post" action="{{ url_for('college.complete_review', review_id=r.id) }}" class="inline-form">
+          <input type="hidden" name="next" value="{{ request.full_path }}">
+          <button class="btn sm primary" type="submit">Revisei</button>
+        </form>
+        <form method="post" action="{{ url_for('college.snooze_review', review_id=r.id) }}" class="inline-form">
+          <input type="hidden" name="next" value="{{ request.full_path }}">
+          <input type="hidden" name="days" value="1">
+          <button class="btn sm ghost" type="submit">Adiar 1 dia</button>
+        </form>
+        <form method="post" action="{{ url_for('college.archive_review', review_id=r.id) }}"
+              class="inline-form" data-confirm="Arquivar esta revisao?">
+          <input type="hidden" name="next" value="{{ request.full_path }}">
+          <button class="btn sm ghost">x</button>
+        </form>
+      </div>
+    {% else %}
+      <div class="empty">Nenhuma revisao vencida. Estude o tema da vez.</div>
+    {% endfor %}
+  </div>
+
+  {% if reviews_upcoming %}
+    <details class="box mt">
+      <summary>Proximas revisoes ({{ reviews_upcoming|length }} em 14 dias)</summary>
+      <div class="list">
+        {% for r in reviews_upcoming %}
+          <div class="list-item">
+            <span class="badge">{{ r.label }}</span>
+            <div class="grow"><div class="name">{{ r.name }}</div>
+              <div class="sub">{{ r.subject_name }}</div></div>
+            <span class="dim small nowrap">{{ r.next_date|date_br }}</span>
+          </div>
+        {% endfor %}
+      </div>
+    </details>
+  {% endif %}
+</section>
+
+{# ---------------------------------------------------------------- 3. O PLANO #}
+<section class="card">
+  <div class="card-head">
+    <div class="card-title">Plano ate o prazo</div>
+    <div class="spacer"></div>
+    <form method="post" action="{{ url_for('college.replan') }}" class="inline-form">
+      <input type="hidden" name="next" value="{{ request.full_path }}">
+      <button class="btn sm ghost" type="submit">Recalcular</button>
+    </form>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Data</th><th>Tema</th><th>Disciplina</th><th class="right">Acoes</th></tr></thead>
+      <tbody>
+        {% for t in plan[:plan_preview] %}
+          <tr>
+            <td class="nowrap {{ 'strong' if loop.first }}">{{ t.planned_date|date_br }}</td>
+            <td>{{ t.name }}</td>
+            <td class="muted">{{ t.subject_name }}</td>
+            <td class="actions nowrap">
+              {% if not loop.first %}
+                <form method="post" action="{{ url_for('college.focus_topic', topic_id=t.id) }}" class="inline-form">
+                  <input type="hidden" name="next" value="{{ request.full_path }}">
+                  <button class="btn sm ghost" type="submit">Estudar hoje</button>
+                </form>
+              {% endif %}
+              <form method="post" action="{{ url_for('college.complete_topic', topic_id=t.id) }}" class="inline-form">
+                <input type="hidden" name="next" value="{{ request.full_path }}">
+                <button class="btn sm" type="submit">Concluir</button>
+              </form>
+            </td>
+          </tr>
+        {% else %}
+          <tr><td colspan="4" class="dim center">Nenhum tema pendente.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if plan|length > plan_preview %}
+    <details class="box mt">
+      <summary>Ver o plano inteiro ({{ plan|length }} temas)</summary>
+      <div class="list">
+        {% for t in plan[plan_preview:] %}
+          <div class="list-item">
+            <span class="dim small nowrap">{{ t.planned_date|date_br }}</span>
+            <div class="grow"><div class="name">{{ t.name }}</div>
+              <div class="sub">{{ t.subject_name }}</div></div>
+          </div>
+        {% endfor %}
+      </div>
+    </details>
+  {% endif %}
+  <div class="tiny dim mt">
+    As datas sao sugestao, nao cobranca: o plano e refeito a cada visita com os
+    temas que sobraram e os dias que sobraram. Atrasar nao gera pendencia.
+    "Estudar hoje" puxa qualquer tema para a frente da fila - so por hoje.
+  </div>
+</section>
+
+{# ---------------------------------------------------------------- 4. CONTEUDO #}
+<section class="card">
+  <div class="card-head"><div class="card-title">Conteudo por disciplina</div></div>
+  {% for s in subjects %}
+    {% set meus = topics|selectattr('college_subject_id', 'equalto', s.id)|list %}
+    {% set feitos = meus|selectattr('status', 'equalto', 'concluido')|list %}
+    <details class="box">
+      <summary>
+        {{ s.name }} - {{ feitos|length }}/{{ meus|length }} temas &middot; {{ s.minutes|minutes }}
+      </summary>
+      <div class="list">
+        {% for t in meus %}
+          <div class="list-item">
+            <span class="dot {{ 'good' if t.status == 'concluido' }}"></span>
+            <div class="grow">
+              <div class="name">{{ t.name }}</div>
+              <div class="sub">
+                {% if t.status == 'concluido' %}concluido em {{ t.completed_at|date_br }}
+                {% else %}previsto para {{ t.planned_date|date_br }}{% endif %}
+              </div>
+            </div>
+            {% if t.status == 'concluido' %}
+              <form method="post" action="{{ url_for('college.reopen_topic', topic_id=t.id) }}" class="inline-form">
+                <input type="hidden" name="next" value="{{ request.full_path }}">
+                <button class="btn sm ghost" type="submit">Reabrir</button>
+              </form>
+            {% else %}
+              <form method="post" action="{{ url_for('college.focus_topic', topic_id=t.id) }}" class="inline-form">
+                <input type="hidden" name="next" value="{{ request.full_path }}">
+                <button class="btn sm ghost" type="submit">Estudar hoje</button>
+              </form>
+              <form method="post" action="{{ url_for('college.complete_topic', topic_id=t.id) }}" class="inline-form">
+                <input type="hidden" name="next" value="{{ request.full_path }}">
+                <button class="btn sm" type="submit">Concluir</button>
+              </form>
+            {% endif %}
+            <form method="post" action="{{ url_for('college.delete_topic', topic_id=t.id) }}"
+                  class="inline-form" data-confirm="Excluir este tema?">
+              <input type="hidden" name="next" value="{{ request.full_path }}">
+              <button class="btn sm ghost" type="submit">x</button>
+            </form>
+          </div>
+        {% else %}
+          <div class="empty">Nenhum tema cadastrado nesta disciplina.</div>
+        {% endfor %}
+      </div>
+    </details>
+  {% endfor %}
+
+  <details class="box mt">
+    <summary>Cadastrar tema</summary>
+    <form method="post" action="{{ url_for('college.save_topic') }}">
+      <input type="hidden" name="next" value="{{ request.full_path }}">
+      <div class="form-grid cols-2">
+        <div class="field">
+          <label for="topic_subject">Disciplina</label>
+          <select id="topic_subject" name="college_subject_id" required>
+            <option value="">-</option>
+            {% for s in subjects %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="field"><label for="topic_name">Tema</label>
+          <input type="text" id="topic_name" name="name" required></div>
+      </div>
+      <div class="form-actions"><button class="btn primary" type="submit">Cadastrar</button></div>
+    </form>
+  </details>
+</section>
+
+{# ---------------------------------------------------------------- 5. TEMPO E PRAZOS #}
 <section class="card">
   <div class="card-head">
     <div class="card-title">Semana atual (desde {{ week_start|date_br }})</div>
@@ -28,6 +276,15 @@
           <select id="college_subject_id" name="college_subject_id">
             <option value="">-</option>
             {% for s in subjects %}<option value="{{ s.id }}">{{ s.name }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="field">
+          <label for="session_topic">Tema (opcional)</label>
+          <select id="session_topic" name="college_topic_id">
+            <option value="">-</option>
+            {% for t in topics if t.status != 'concluido' %}
+              <option value="{{ t.id }}">{{ t.subject_name }} - {{ t.name }}</option>
+            {% endfor %}
           </select>
         </div>
         <div class="field"><label for="minutes">Tempo (min)</label>
@@ -139,8 +396,8 @@
       {% for s in sessions %}
         <div class="list-item">
           <div class="grow">
-            <div class="name">{{ s.subject_name or 'Sem disciplina' }}</div>
-            <div class="sub">{{ s.date|date_br }}{% if s.notes %} &middot; {{ s.notes|truncate(40) }}{% endif %}</div>
+            <div class="name">{{ s.topic_name or s.subject_name or 'Sem disciplina' }}</div>
+            <div class="sub">{{ s.date|date_br }}{% if s.topic_name %} &middot; {{ s.subject_name }}{% endif %}{% if s.notes %} &middot; {{ s.notes|truncate(40) }}{% endif %}</div>
           </div>
           <div class="strong nowrap">{{ s.minutes }} min</div>
           <form method="post" action="{{ url_for('college.delete_session', session_id=s.id) }}"

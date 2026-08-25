@@ -75,6 +75,7 @@ def register_context(app: Flask) -> None:
 
     from .db import get_db
     from .seed import has_demo
+    from .services import college as college_service
     from .services import reviews as reviews_service
 
     @app.context_processor
@@ -88,6 +89,8 @@ def register_context(app: Flask) -> None:
             "app_version": __version__,
             "nav_active": request.blueprint,
             "review_badge": reviews_service.counts()["due"],
+            # Faculdade tem fila propria: o badge dela nunca soma com a do PRF.
+            "college_badge": college_service.review_counts()["due"],
             "demo_active": has_demo(get_db()),
             "auth_enabled": auth_module.enabled(),
         }

@@ -219,15 +219,49 @@ O modulo organiza e acompanha treino. Nao e prescricao de treino nem orientacao 
 
 ## Faculdade
 
-Modulo separado, fora do ciclo PRF: disciplinas, atividades com prazo (atividade,
-trabalho, prova, leitura) e registro de horas contra a meta semanal (padrao 4h).
-As atividades com prazo proximo aparecem no Painel.
+Modulo separado, fora do ciclo PRF - e com ciclo e revisao **proprios**. A tela responde
+as mesmas duas perguntas do lado PRF, na mesma ordem:
+
+**1. O que estudar agora.** O conteudo do semestre e cadastrado em **temas** (a unidade da
+faculdade, equivalente ao assunto no PRF). O sistema espalha os temas pendentes entre hoje
+e o **prazo** configurado (Configuracoes -> Faculdade), **alternando as disciplinas**: as
+cinco caminham juntas, nenhuma fica esperando a outra terminar. A tela mostra um tema por
+vez, com a data prevista e o ritmo necessario ("3 temas por semana").
+
+O plano e **recalculado a cada visita**, nunca corrigido a mao:
+
+* atrasou? os temas que sobraram sao redistribuidos nos dias que sobraram - sem pendencia,
+  sem empurrar tudo para a frente;
+* adiantou? o plano afrouxa sozinho;
+* mudou o prazo? o plano inteiro se refaz.
+
+Quando o conteudo ja nao cabe no prazo, o plano **empilha temas no mesmo dia** em vez de
+passar da data - ele prefere avisar "sao 2 temas por dia" a esconder o atraso.
+
+A unica intervencao manual e o botao **Estudar hoje**: ele puxa qualquer tema pendente para
+a frente da fila quando a aula do dia foi outra ou a prova da semana e de outra disciplina.
+A escolha vale **so para hoje** - amanha o plano volta a mandar sozinho, entao ela nunca
+vira um plano paralelo.
+
+**2. O que revisar.** Concluir o tema (botao *Concluir tema*) e o marco que abre a revisao
+espacada - exatamente como concluir um assunto no PRF. Os intervalos padrao sao
+**D1, D7, D15 e D30**, mais curtos que os do concurso de proposito: uma D60 cairia depois
+da prova. Depois do ultimo intervalo o tema esta consolidado.
+
+A fila da faculdade e **independente** da fila do PRF: revisao de faculdade nao entra no
+desempenho, nos pontos fracos nem na tela HOJE. O numero ao lado de "Faculdade" no menu e
+a contagem de revisoes vencidas dela.
+
+Registrar tempo continua existindo (meta semanal, padrao 4h) e agora pode ser amarrado a um
+tema - mas **registrar tempo nao conclui tema nenhum**: so a declaracao explicita conclui.
+
+Atividades com prazo (atividade, trabalho, prova, leitura) continuam como estavam.
 
 ## Configuracoes
 
 Metas do ciclo, metas de questoes, tamanhos de bloco, disponibilidade da escala,
-intervalos de revisao, frequencia e padroes do simulado, TAF, faculdade e limiares de
-desempenho (que controlam as cores e as sugestoes). Nada disso esta fixo no codigo.
+intervalos de revisao, frequencia e padroes do simulado, TAF, prazo e intervalos da
+faculdade e limiares de desempenho (que controlam as cores e as sugestoes). Nada disso esta fixo no codigo.
 
 ### Quando sair o edital
 
