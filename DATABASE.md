@@ -125,6 +125,11 @@ dados reais.
 ### `college_subjects`, `college_topics`, `college_tasks`, `college_sessions`
 Faculdade, com planejamento independente do ciclo PRF.
 
+`college_subjects.exam_date` (migration 008) e a **data da prova** daquela disciplina -
+o prazo deixou de ser um so para toda a faculdade. E ela que define o ritmo: o plano
+espalha os temas da disciplina entre hoje e a prova DELA. Vazia, vale o `college_deadline`
+das configuracoes como reserva.
+
 `college_topics` (migration 007) e o **tema** - a unidade de conteudo da faculdade, o
 equivalente de `subjects` no lado PRF. `position` e a ordem dentro da disciplina,
 `planned_date` e a data sugerida pelo plano (**reescrita a cada recalculo**, nunca editada

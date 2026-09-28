@@ -6,15 +6,18 @@ Duas perguntas, do mesmo jeito que o lado PRF - e nenhuma a mais:
     "o que eu reviso hoje?"        -> a fila de revisao (due / complete_review)
 
 A diferenca em relacao ao PRF e o PRAZO. O ciclo do concurso gira para sempre;
-o da faculdade precisa terminar TODO o conteudo em uma data (`college_deadline`).
-Por isso aqui o ciclo nao e uma sequencia infinita: e a lista de temas pendentes
-espalhada entre hoje e o prazo, uma data sugerida por tema.
+o da faculdade precisa terminar o conteudo de cada disciplina ate a DATA DA
+PROVA dela (`college_subjects.exam_date`). Por isso aqui o ciclo nao e uma
+sequencia infinita: e a lista de temas pendentes espalhada entre hoje e a prova,
+uma data sugerida por tema.
 
 Duas regras sustentam o resto:
 
+* Cada disciplina corre para a SUA prova. Quem tem prova antes recebe as datas
+  mais apertadas; quem tem prova depois ganha o tempo extra - e nao o contrario.
 * A ORDEM alterna as disciplinas. Nao existe "termino NoSQL e depois comeco
   testes": os temas das cinco disciplinas se intercalam, entao todas caminham
-  juntas ate o prazo.
+  juntas ate a prova.
 * O PLANO E RECALCULADO, nunca corrigido a mao. Atrasar um tema nao gera
   pendencia nem empurra tudo: no proximo recalculo os temas que sobraram sao
   redistribuidos no tempo que sobrou. Adiantar tambem afrouxa o plano sozinho.
@@ -64,7 +67,22 @@ def _run(sql: str, params: tuple = (), conn=None) -> sqlite3.Cursor:
 # Configuracao
 # --------------------------------------------------------------------------
 def deadline(conn=None) -> str:
+    """Prazo de reserva - vale so para disciplina cadastrada sem data de prova."""
     return settings_service.get(DEADLINE_KEY, "", conn) or add_days(today_iso(), 60)
+
+
+def exam_dates(conn=None) -> dict[int, str]:
+    """Data da prova de cada disciplina ativa, com o prazo de reserva no lugar
+    das que ainda nao tem data marcada."""
+    reserva = deadline(conn)
+    return {int(r["id"]): (r["exam_date"] or reserva)
+            for r in _all("SELECT id, exam_date FROM college_subjects WHERE active = 1",
+                          conn=conn)}
+
+
+def set_exam_date(subject_id: int, date: str | None, conn=None) -> None:
+    _run("UPDATE college_subjects SET exam_date = ? WHERE id = ?",
+         (date or None, subject_id), conn)
 
 
 def intervals(conn=None) -> list[int]:
@@ -134,6 +152,20 @@ def get_topic(topic_id: int, conn=None) -> dict | None:
     return dict(row) if row else None
 
 
+def _subject_order(pendentes: list[dict]) -> list[int]:
+    """Disciplinas na ordem de largada: quem tem mais conteudo pendente primeiro.
+
+    E quem corre mais risco de nao caber ate a prova. O nome desempata para a
+    ordem ser estavel entre dois recalculos.
+    """
+    por_disciplina: dict[int, list[dict]] = {}
+    for tema in pendentes:
+        por_disciplina.setdefault(tema["college_subject_id"], []).append(tema)
+    return [sid for sid, _ in sorted(
+        por_disciplina.items(),
+        key=lambda item: (-len(item[1]), item[1][0]["subject_name"]))]
+
+
 def rotation(conn=None) -> list[dict]:
     """Temas pendentes na ordem de estudo, alternando as disciplinas.
 
@@ -151,19 +183,15 @@ def rotation(conn=None) -> list[dict]:
     if not pendentes:
         return []
 
+    ordem = _subject_order(pendentes)
     por_disciplina: dict[int, list[dict]] = {}
     for tema in pendentes:
         por_disciplina.setdefault(tema["college_subject_id"], []).append(tema)
 
-    # Quem tem mais conteudo pendente comeca primeiro: e quem corre mais risco
-    # de nao caber no prazo.
-    ordem = sorted(por_disciplina.values(),
-                   key=lambda temas: (-len(temas), temas[0]["subject_name"]))
-    total_disciplinas = len(ordem)
-
     entradas: list[tuple[float, int, int, dict]] = []
-    for indice, temas in enumerate(ordem):
-        fase = indice / total_disciplinas
+    for indice, sid in enumerate(ordem):
+        temas = por_disciplina[sid]
+        fase = indice / len(ordem)
         for i, tema in enumerate(temas):
             entradas.append(((i + fase) / len(temas), len(temas), indice, tema))
 
@@ -173,10 +201,17 @@ def rotation(conn=None) -> list[dict]:
 
 
 def plan(reference: str | None = None, conn=None) -> list[dict]:
-    """Espalha os temas pendentes entre hoje e o prazo e grava as datas.
+    """Espalha os temas pendentes de cada disciplina entre hoje e a prova DELA.
 
-    A ultima data cai um pouco ANTES do prazo (passo = dias / temas, e nao
-    dias / (temas - 1)): a folga que sobra e o colchao da semana de prova.
+    Cada disciplina e uma corrida propria: `passo = dias ate a prova / temas
+    pendentes`. Quem tem prova em 19/11 com 11 temas recebe um tema a cada 4
+    dias; quem tem prova em 23/11 com 4 temas, um a cada 14. O calendario final
+    e a fusao das cinco corridas, ordenada por data - e por isso as disciplinas
+    se intercalam sozinhas, sem ninguem esperar a outra terminar.
+
+    As largadas sao defasadas para as cinco disciplinas nao estrearem todas no
+    mesmo dia. A ultima data cai um pouco ANTES da prova (passo = dias / temas,
+    e nao dias / (temas - 1)): a folga que sobra e o colchao da semana de prova.
     Quando ja nao ha dias suficientes, varios temas caem no mesmo dia - o plano
     prefere dizer a verdade ("sao 2 temas por dia") a esconder o atraso.
     """
@@ -185,20 +220,41 @@ def plan(reference: str | None = None, conn=None) -> list[dict]:
     if not fila:
         return []
 
-    # Escolha do dia fura a fila - o resto mantem a ordem e so anda uma casa.
-    escolhido = focus(reference, conn)
-    if escolhido is not None:
-        fila.sort(key=lambda tema: tema["id"] != escolhido)
+    provas = exam_dates(conn)
+    pendentes: dict[int, int] = {}
+    for tema in fila:
+        pendentes[tema["college_subject_id"]] = pendentes.get(
+            tema["college_subject_id"], 0) + 1
 
-    dias = max(0, days_between(reference, deadline(conn)))
-    passo = dias / len(fila)
+    # Sem defasagem, o primeiro tema das cinco disciplinas cairia todo no mesmo
+    # dia (indice 0 = hoje para todas). A fase adia a largada de cada uma por
+    # uma fracao do passo dela - a primeira comeca hoje, as outras se distribuem.
+    ordem = _subject_order(fila)
+    fases = {sid: indice / len(ordem) for indice, sid in enumerate(ordem)}
+
+    escolhido = focus(reference, conn)
     saida = []
-    for indice, tema in enumerate(fila):
-        data = add_days(reference, min(dias, round(indice * passo)))
+    indice_na_disciplina: dict[int, int] = {}
+    for tema in fila:
+        disciplina = tema["college_subject_id"]
+        i = indice_na_disciplina.get(disciplina, 0)
+        indice_na_disciplina[disciplina] = i + 1
+        dias = max(0, days_between(reference, provas.get(disciplina, deadline(conn))))
+        passo = dias / pendentes[disciplina]
+        data = add_days(reference, min(dias, round((i + fases[disciplina]) * passo)))
+        saida.append(dict(tema, planned_date=data, exam_date=provas.get(disciplina),
+                          today=data == reference, chosen=tema["id"] == escolhido))
+
+    # A data manda na ordem; a rotacao (que ja alterna as disciplinas) desempata.
+    # A escolha do dia fura a fila inteira e passa a valer para hoje.
+    for tema in saida:
+        if tema["id"] == escolhido:
+            tema["planned_date"] = reference
+    saida.sort(key=lambda tema: (tema["id"] != escolhido, tema["planned_date"],
+                                 tema["order"]))
+    for tema in saida:
         _run("UPDATE college_topics SET planned_date = ? WHERE id = ?",
-             (data, tema["id"]), conn)
-        saida.append(dict(tema, planned_date=data, today=data == reference,
-                          chosen=tema["id"] == escolhido))
+             (tema["planned_date"], tema["id"]), conn)
     return saida
 
 
@@ -259,31 +315,83 @@ def delete_topic(topic_id: int, conn=None) -> None:
     plan(conn=conn)
 
 
+def restart_cycle(reference: str | None = None, conn=None) -> dict:
+    """Zera o ciclo: todo tema volta a pendente e a fila de revisao e arquivada.
+
+    E o botao de virada de semestre - ou de "vou refazer tudo antes da prova".
+    Arquiva em vez de apagar: `college_reviews` guarda quantas vezes cada tema
+    ja foi revisado, e essa historia nao se joga fora. O tempo estudado
+    (`college_sessions`) tambem fica - ele diz quanto do semestre ja foi gasto.
+    """
+    reference = reference or today_iso()
+    reabertos = _run("UPDATE college_topics SET status = 'pendente', completed_at = NULL"
+                     " WHERE status = 'concluido'", (), conn).rowcount
+    arquivadas = _run("UPDATE college_reviews SET status = 'arquivada'"
+                      " WHERE status = 'pendente'", (), conn).rowcount
+    clear_focus(conn)
+    return {"topics": reabertos, "reviews": arquivadas, "plan": len(plan(reference, conn))}
+
+
 # --------------------------------------------------------------------------
-# Progresso contra o prazo
+# Progresso contra a prova
 # --------------------------------------------------------------------------
 def progress(reference: str | None = None, conn=None) -> dict:
-    """Os numeros que decidem se o prazo cabe: falta tanto, sobra tanto tempo."""
+    """Os numeros que decidem se o conteudo cabe: falta tanto, sobra tanto tempo.
+
+    Alem do total, devolve `exams`: uma linha por DATA DE PROVA, porque e nela
+    que o aperto aparece. Tres disciplinas em 19/11 e duas em 23/11 sao duas
+    corridas diferentes - a media das duas esconderia justamente a que aperta.
+    """
     reference = reference or today_iso()
     itens = topics(conn=conn)
     total = len(itens)
     done = len([t for t in itens if t["status"] == "concluido"])
     pending = total - done
-    days_left = days_between(reference, deadline(conn))
+    provas = exam_dates(conn)
+
+    por_prova: dict[str, dict] = {}
+    for tema in itens:
+        if tema["status"] == "concluido":
+            continue
+        data = provas.get(tema["college_subject_id"], deadline(conn))
+        linha = por_prova.setdefault(data, {"date": data, "pending": 0, "subjects": []})
+        linha["pending"] += 1
+        if tema["subject_name"] not in linha["subjects"]:
+            linha["subjects"].append(tema["subject_name"])
+
+    exams = []
+    for linha in sorted(por_prova.values(), key=lambda e: e["date"]):
+        dias = days_between(reference, linha["date"])
+        semanas = max(dias, 0) / 7
+        linha.update({
+            "days_left": dias,
+            "per_week": (round(linha["pending"] / semanas, 1) if semanas >= 1
+                         else float(linha["pending"])),
+            "days_per_topic": (round(dias / linha["pending"], 1) if dias > 0 else 0.0),
+            "late": dias < 0,
+            "tight": 0 <= dias < linha["pending"],
+        })
+        exams.append(linha)
+
+    # O horizonte geral e a ULTIMA prova; o aperto vem da mais apertada.
+    horizonte = max(provas.values()) if provas else deadline(conn)
+    days_left = days_between(reference, horizonte)
     weeks_left = max(days_left, 0) / 7
     return {
         "total": total,
         "done": done,
         "pending": pending,
         "percent": round(done / total * 100, 1) if total else 0.0,
-        "deadline": deadline(conn),
+        "deadline": horizonte,
+        "next_exam": exams[0]["date"] if exams else horizonte,
+        "exams": exams,
         "days_left": days_left,
         "per_week": (round(pending / weeks_left, 1) if pending and weeks_left >= 1
                      else float(pending)),
         "days_per_topic": (round(days_left / pending, 1)
                            if pending and days_left > 0 else 0.0),
-        "late": days_left < 0 and pending > 0,
-        "tight": pending > 0 and 0 <= days_left < pending,
+        "late": any(e["late"] for e in exams),
+        "tight": any(e["tight"] for e in exams),
     }
 
 

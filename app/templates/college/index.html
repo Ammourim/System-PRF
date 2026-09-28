@@ -3,7 +3,8 @@
 
 {% block title %}Faculdade - Sistema PRF{% endblock %}
 {% block heading %}Faculdade{% endblock %}
-{% block subtitle %}<div class="subtitle">Ciclo e revisoes proprios, separados do PRF. Todo o conteudo ate {{ progress.deadline|date_br }}.</div>{% endblock %}
+{% block subtitle %}<div class="subtitle">Ciclo e revisoes proprios, separados do PRF.
+  {% if progress.exams %}Proxima prova em {{ progress.next_exam|date_br }}.{% endif %}</div>{% endblock %}
 
 {% block content %}
 
@@ -13,14 +14,15 @@
     <div class="card-title">Estude agora</div>
     <div class="spacer"></div>
     <span class="tiny dim">{{ progress.done }} de {{ progress.total }} temas &middot;
-      faltam {{ progress.days_left }} dia(s) para o prazo</span>
+      proxima prova em {{ progress.next_exam|date_br }}</span>
   </div>
 
   {% if current_topic %}
     <div class="row tight">
       <div class="grow">
         <div class="name big">{{ current_topic.name }}</div>
-        <div class="sub">{{ current_topic.subject_name }}</div>
+        <div class="sub">{{ current_topic.subject_name }}
+          {% if current_topic.exam_date %}&middot; prova em {{ current_topic.exam_date|date_br }}{% endif %}</div>
       </div>
       {% if current_topic.chosen %}
         <span class="badge accent">escolhido por voce para hoje</span>
@@ -56,16 +58,30 @@
 
   <div class="mt">
     {{ progress_bar(progress.done, progress.total) }}
-    <div class="tiny dim mt">
-      {% if progress.pending %}
-        Ritmo necessario: <strong>{{ progress.per_week }} tema(s) por semana</strong>
-        (um tema a cada {{ progress.days_per_topic }} dia(s)).
-        {% if progress.late %}<span class="text-bad">O prazo ja passou com {{ progress.pending }} tema(s) em aberto.</span>
-        {% elif progress.tight %}<span class="text-warn">Sao {{ progress.pending }} temas para {{ progress.days_left }} dias - mais de um por dia.</span>{% endif %}
-      {% else %}
-        Conteudo completo. Daqui para a frente so revisao.
-      {% endif %}
-    </div>
+    {% if progress.pending %}
+      <div class="list mt">
+        {% for e in progress.exams %}
+          <div class="list-item">
+            <span class="badge {{ 'bad' if e.late else ('warn' if e.tight else 'accent') }}">
+              {{ e.date|date_br }}</span>
+            <div class="grow">
+              <div class="name">{{ e.pending }} tema(s) &middot; {{ e.per_week }} por semana</div>
+              <div class="sub">{{ e.subjects|join(', ') }}</div>
+            </div>
+            <span class="dim small nowrap">
+              {% if e.late %}prova passou{% else %}{{ e.days_left }} dia(s){% endif %}</span>
+          </div>
+        {% endfor %}
+      </div>
+      <div class="tiny dim mt">
+        Cada disciplina corre para a data da prova DELA - quem tem prova antes recebe
+        as datas mais apertadas.
+        {% if progress.tight %}<span class="text-warn">Ha prova com mais temas que dias:
+          vai cair mais de um tema por dia.</span>{% endif %}
+      </div>
+    {% else %}
+      <div class="tiny dim mt">Conteudo completo. Daqui para a frente so revisao.</div>
+    {% endif %}
   </div>
 </section>
 
@@ -137,13 +153,14 @@
   </div>
   <div class="table-wrap">
     <table>
-      <thead><tr><th>Data</th><th>Tema</th><th>Disciplina</th><th class="right">Acoes</th></tr></thead>
+      <thead><tr><th>Data</th><th>Tema</th><th>Disciplina</th><th>Prova</th><th class="right">Acoes</th></tr></thead>
       <tbody>
         {% for t in plan[:plan_preview] %}
           <tr>
             <td class="nowrap {{ 'strong' if loop.first }}">{{ t.planned_date|date_br }}</td>
             <td>{{ t.name }}</td>
             <td class="muted">{{ t.subject_name }}</td>
+            <td class="muted nowrap">{{ t.exam_date|date_br }}</td>
             <td class="actions nowrap">
               {% if not loop.first %}
                 <form method="post" action="{{ url_for('college.focus_topic', topic_id=t.id) }}" class="inline-form">
@@ -158,7 +175,7 @@
             </td>
           </tr>
         {% else %}
-          <tr><td colspan="4" class="dim center">Nenhum tema pendente.</td></tr>
+          <tr><td colspan="5" class="dim center">Nenhum tema pendente.</td></tr>
         {% endfor %}
       </tbody>
     </table>
@@ -171,7 +188,7 @@
           <div class="list-item">
             <span class="dim small nowrap">{{ t.planned_date|date_br }}</span>
             <div class="grow"><div class="name">{{ t.name }}</div>
-              <div class="sub">{{ t.subject_name }}</div></div>
+              <div class="sub">{{ t.subject_name }} &middot; prova em {{ t.exam_date|date_br }}</div></div>
           </div>
         {% endfor %}
       </div>
@@ -181,6 +198,13 @@
     As datas sao sugestao, nao cobranca: o plano e refeito a cada visita com os
     temas que sobraram e os dias que sobraram. Atrasar nao gera pendencia.
     "Estudar hoje" puxa qualquer tema para a frente da fila - so por hoje.
+  </div>
+  <div class="form-actions">
+    <form method="post" action="{{ url_for('college.restart_cycle') }}" class="inline-form"
+          data-confirm="Reiniciar o ciclo? Todos os temas voltam a pendente e as revisoes em aberto sao arquivadas.">
+      <input type="hidden" name="next" value="{{ request.full_path }}">
+      <button class="btn sm ghost" type="submit">Reiniciar ciclo do zero</button>
+    </form>
   </div>
 </section>
 
@@ -367,6 +391,13 @@
             <div class="name">{{ s.name }}</div>
             <div class="sub">{{ s.professor or 'sem professor informado' }}</div>
           </div>
+          <form method="post" action="{{ url_for('college.set_exam_date', subject_id=s.id) }}"
+                class="inline-form">
+            <input type="hidden" name="next" value="{{ request.full_path }}">
+            <input type="date" name="exam_date" value="{{ s.exam_date or '' }}"
+                   aria-label="Data da prova de {{ s.name }}">
+            <button class="btn sm" type="submit">Salvar prova</button>
+          </form>
           <span class="dim small">{{ s.minutes|minutes }}</span>
           <form method="post" action="{{ url_for('college.delete_subject', subject_id=s.id) }}"
                 class="inline-form" data-confirm="Desativar esta disciplina?">
@@ -384,6 +415,7 @@
         <div class="form-grid cols-2">
           <div class="field"><label>Nome</label><input type="text" name="name" required></div>
           <div class="field"><label>Professor</label><input type="text" name="professor"></div>
+          <div class="field"><label>Data da prova</label><input type="date" name="exam_date"></div>
         </div>
         <div class="form-actions"><button class="btn primary" type="submit">Cadastrar</button></div>
       </form>

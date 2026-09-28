@@ -51,34 +51,38 @@ TAF_TESTS = [
     ("Abdominal (1 min)", "repeticoes", 1, None, 40.0),
 ]
 
-# Faculdade: disciplinas do semestre e os TEMAS de cada uma, na ordem em que o
-# conteudo e dado. `True` marca o que ja foi estudado antes do sistema existir -
-# esse tema entra como concluido e ja nasce com a fila de revisao aberta.
+# Faculdade: disciplinas do semestre, a DATA DA PROVA de cada uma e os TEMAS na
+# ordem em que o conteudo e dado. `True` marca o que ja foi estudado antes do
+# sistema existir - esse tema entra como concluido e ja nasce com a fila de
+# revisao aberta.
 #
-# (nome da disciplina, [(tema, ja_estudado), ...])
-COLLEGE_SUBJECTS: list[tuple[str, list[tuple[str, bool]]]] = [
-    ("Qualidade e Testes de Software", [
+# A data da prova e o que define o ritmo: o plano espalha os temas de cada
+# disciplina entre hoje e a prova DELA (`services/college.plan`).
+#
+# (nome da disciplina, data da prova, [(tema, ja_estudado), ...])
+COLLEGE_SUBJECTS: list[tuple[str, str, list[tuple[str, bool]]]] = [
+    ("Qualidade e Testes de Software", "2026-11-23", [
         ("Tema 1 - Modelos de Ciclo de Vida de Software", False),
         ("Tema 2 - Processo do Teste de Software e Seus Principios", False),
         ("Tema 3 - Estrategias e Planejamento de Teste de Software", False),
         ("Tema 4 - Gestao de Defeitos e Plano de Teste", False),
     ]),
-    ("Programacao para Dispositivos Moveis em Android", [
+    ("Programacao para Dispositivos Moveis em Android", "2026-11-19", [
         ("Tema 2 - Sintaxe e Componentes do React Native", True),
         ("Tema 3 - Interface Grafica com React Native", False),
         ("Tema 4 - Persistencia de Dados com React Native", False),
         ("Tema 5 - Conexao Remota com React Native", False),
         ("Tema 6 - Topicos Avancados em React Native", False),
     ]),
-    ("Banco de Dados NoSQL", [(f"Tema {n}", n <= 2) for n in range(1, 12)]),
-    ("Desenvolvimento de Back-end", [
+    ("Banco de Dados NoSQL", "2026-11-19", [(f"Tema {n}", n <= 2) for n in range(1, 12)]),
+    ("Desenvolvimento de Back-end", "2026-11-19", [
         ("Tema 1 - Tecnologias de Transmissao de Dados em Sistemas Web", True),
         ("Tema 2 - Programacao Servidor com Java", False),
         ("Tema 3 - Persistencia com Spring Data", False),
         ("Tema 4 - Servicos de Mensageria", False),
         ("Tema 5 - Web Services em Java", False),
     ]),
-    ("Linhas de Produtos de Software", [
+    ("Linhas de Produtos de Software", "2026-11-23", [
         ("Tema 1 - Conceitos de Linhas de Produtos de Software (LPS)", False),
         ("Tema 2 - Variabilidade em LPS", False),
         ("Tema 3 - Engenharia do Dominio", False),
@@ -166,12 +170,13 @@ def _ensure_college(conn: sqlite3.Connection) -> None:
     """
     from .services import college as college_service
 
-    for name, temas in COLLEGE_SUBJECTS:
+    for name, exam_date, temas in COLLEGE_SUBJECTS:
         row = conn.execute("SELECT id FROM college_subjects WHERE name = ?",
                            (name,)).fetchone()
         if row is None:
             subject_id = conn.execute(
-                "INSERT INTO college_subjects (name) VALUES (?)", (name,)).lastrowid
+                "INSERT INTO college_subjects (name, exam_date) VALUES (?, ?)",
+                (name, exam_date)).lastrowid
         else:
             subject_id = row["id"]
         for position, (tema, estudado) in enumerate(temas, start=1):

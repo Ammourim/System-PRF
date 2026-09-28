@@ -223,10 +223,17 @@ Modulo separado, fora do ciclo PRF - e com ciclo e revisao **proprios**. A tela 
 as mesmas duas perguntas do lado PRF, na mesma ordem:
 
 **1. O que estudar agora.** O conteudo do semestre e cadastrado em **temas** (a unidade da
-faculdade, equivalente ao assunto no PRF). O sistema espalha os temas pendentes entre hoje
-e o **prazo** configurado (Configuracoes -> Faculdade), **alternando as disciplinas**: as
-cinco caminham juntas, nenhuma fica esperando a outra terminar. A tela mostra um tema por
-vez, com a data prevista e o ritmo necessario ("3 temas por semana").
+faculdade, equivalente ao assunto no PRF). Cada disciplina tem a sua **data de prova**, e e
+ela que define o ritmo: os temas daquela disciplina sao espalhados entre hoje e a prova
+DELA. Quem tem prova antes recebe as datas mais apertadas; quem tem prova depois ganha o
+tempo extra - e nao o contrario.
+
+As disciplinas se intercalam sozinhas (as largadas sao defasadas para as cinco nao
+estrearem no mesmo dia) e a de mais conteudo volta mais vezes. A tela mostra um tema por
+vez e, logo abaixo, **uma linha por data de prova** com quantos temas faltam e o ritmo
+necessario - porque e ai que o aperto aparece, e a media das duas o esconderia.
+
+A data da prova se edita direto na lista de disciplinas, na propria tela da faculdade.
 
 O plano e **recalculado a cada visita**, nunca corrigido a mao:
 
@@ -238,7 +245,11 @@ O plano e **recalculado a cada visita**, nunca corrigido a mao:
 Quando o conteudo ja nao cabe no prazo, o plano **empilha temas no mesmo dia** em vez de
 passar da data - ele prefere avisar "sao 2 temas por dia" a esconder o atraso.
 
-A unica intervencao manual e o botao **Estudar hoje**: ele puxa qualquer tema pendente para
+**Reiniciar ciclo do zero** (no fim do plano) devolve todos os temas a pendente e arquiva
+as revisoes em aberto - e a virada de semestre, ou a decisao de refazer tudo antes da
+prova. O tempo ja registrado e o historico de revisoes ficam.
+
+A outra intervencao manual e o botao **Estudar hoje**: ele puxa qualquer tema pendente para
 a frente da fila quando a aula do dia foi outra ou a prova da semana e de outra disciplina.
 A escolha vale **so para hoje** - amanha o plano volta a mandar sozinho, entao ela nunca
 vira um plano paralelo.

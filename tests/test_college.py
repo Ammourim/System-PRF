@@ -1,6 +1,6 @@
 """Faculdade: plano ate o prazo e revisao espacada propria."""
 
-from app.db import query_one
+from app.db import query_all, query_one
 from app.services import college as college_service
 from app.services import settings as settings_service
 from app.utils import add_days, days_between, today_iso
@@ -33,22 +33,52 @@ def test_tema_ja_estudado_entra_concluido_e_com_revisao_aberta(ctx):
 # --------------------------------------------------------------------------
 # Plano ate o prazo
 # --------------------------------------------------------------------------
-def test_plano_cabe_dentro_do_prazo(ctx):
+def test_plano_cabe_ate_a_prova_de_cada_disciplina(ctx):
+    """Cada tema tem de estar pronto antes da prova DELE - nao de uma media."""
     plano = college_service.plan()
-    prazo = college_service.deadline()
     assert plano
     assert plano[0]["planned_date"] == today_iso()
-    assert all(t["planned_date"] <= prazo for t in plano)
+    assert all(t["planned_date"] <= t["exam_date"] for t in plano)
     datas = [t["planned_date"] for t in plano]
     assert datas == sorted(datas)
 
 
-def test_plano_alterna_disciplinas(ctx):
-    """Duas disciplinas iguais seguidas so quando nao ha outra opcao."""
+def test_cada_disciplina_corre_para_a_sua_prova(ctx):
+    """Quem tem prova antes recebe as datas mais apertadas."""
     plano = college_service.plan()
-    seguidas = [1 for a, b in zip(plano, plano[1:])
-                if a["college_subject_id"] == b["college_subject_id"]]
-    assert not seguidas
+    provas = {t["exam_date"] for t in plano}
+    assert provas == {"2026-11-19", "2026-11-23"}
+    for prova in provas:
+        temas = [t for t in plano if t["exam_date"] == prova]
+        assert max(t["planned_date"] for t in temas) <= prova
+
+
+def test_prova_mais_perto_com_mais_conteudo_estuda_mais_denso(ctx):
+    """NoSQL tem 9 temas ate 19/11; LPS tem 4 ate 23/11 - NoSQL volta mais vezes."""
+    plano = college_service.plan()
+    nosql = [t for t in plano if t["subject_name"] == "Banco de Dados NoSQL"]
+    lps = [t for t in plano if t["subject_name"] == "Linhas de Produtos de Software"]
+    assert len(nosql) > len(lps)
+    assert _intervalo_medio(nosql) < _intervalo_medio(lps)
+
+
+def _intervalo_medio(temas):
+    datas = sorted(t["planned_date"] for t in temas)
+    return sum(days_between(a, b) for a, b in zip(datas, datas[1:])) / (len(datas) - 1)
+
+
+def test_plano_alterna_disciplinas(ctx):
+    """Nenhuma disciplina fica parada esperando a outra terminar."""
+    plano = college_service.plan()
+    primeiros = {t["college_subject_id"] for t in plano[:6]}
+    assert len(primeiros) >= 4      # as cinco disciplinas comecam quase juntas
+
+
+def test_as_disciplinas_nao_estreiam_todas_no_mesmo_dia(ctx):
+    """Sem defasagem, o tema 1 das cinco cairia todo em hoje."""
+    plano = college_service.plan()
+    hoje = [t for t in plano if t["planned_date"] == today_iso()]
+    assert len(hoje) == 1
 
 
 def test_escolher_o_tema_de_hoje_fura_a_fila(ctx):
@@ -101,14 +131,56 @@ def test_atraso_nao_gera_pendencia_o_plano_e_redistribuido(ctx):
     depois = college_service.plan(add_days(today_iso(), 10))
     assert len(antes) == len(depois)
     assert depois[0]["planned_date"] == add_days(today_iso(), 10)
-    assert all(t["planned_date"] <= college_service.deadline() for t in depois)
+    assert all(t["planned_date"] <= t["exam_date"] for t in depois)
 
 
-def test_prazo_apertado_empilha_temas_no_mesmo_dia_em_vez_de_estourar(ctx):
-    settings_service.set_value("college_deadline", add_days(today_iso(), 3))
+def test_prova_apertada_empilha_temas_no_mesmo_dia_em_vez_de_estourar(ctx):
+    for disciplina in query_all("SELECT id FROM college_subjects"):
+        college_service.set_exam_date(disciplina["id"], add_days(today_iso(), 3))
     plano = college_service.plan()
     assert all(days_between(today_iso(), t["planned_date"]) <= 3 for t in plano)
     assert college_service.progress()["tight"] is True
+
+
+def test_progresso_separa_uma_linha_por_prova(ctx):
+    exames = college_service.progress()["exams"]
+    assert [e["date"] for e in exames] == ["2026-11-19", "2026-11-23"]
+    assert sum(e["pending"] for e in exames) == college_service.progress()["pending"]
+    assert "Banco de Dados NoSQL" in exames[0]["subjects"]
+    assert "Qualidade e Testes de Software" in exames[1]["subjects"]
+
+
+def test_disciplina_sem_data_de_prova_usa_o_prazo_de_reserva(ctx):
+    disciplina = query_one("SELECT id FROM college_subjects WHERE name = 'Banco de Dados NoSQL'")
+    college_service.set_exam_date(disciplina["id"], None)
+    settings_service.set_value("college_deadline", add_days(today_iso(), 20))
+    nosql = [t for t in college_service.plan()
+             if t["college_subject_id"] == disciplina["id"]]
+    assert all(t["planned_date"] <= add_days(today_iso(), 20) for t in nosql)
+
+
+# --------------------------------------------------------------------------
+# Reiniciar o ciclo
+# --------------------------------------------------------------------------
+def test_reiniciar_devolve_todos_os_temas_e_arquiva_as_revisoes(ctx):
+    resultado = college_service.restart_cycle()
+
+    assert resultado["topics"] == 4          # os ja estudados do seed
+    assert resultado["reviews"] == 4
+    assert college_service.progress()["done"] == 0
+    assert len(college_service.plan()) == 29
+    assert college_service.due() == []
+    assert query_one("SELECT COUNT(*) AS n FROM college_reviews"
+                     " WHERE status = 'pendente'")["n"] == 0
+
+
+def test_reiniciar_preserva_o_historico_de_tempo_estudado(ctx):
+    tema = college_service.plan()[0]
+    college_service.complete_topic(tema["id"], minutes=90)
+    college_service.restart_cycle()
+
+    assert college_service.minutes_of_topic(tema["id"]) == 90
+    assert query_one("SELECT COUNT(*) AS n FROM college_reviews")["n"] > 0
 
 
 def test_progresso_conta_temas_e_ritmo(ctx):
@@ -218,10 +290,22 @@ def test_escolher_tema_de_hoje_pela_tela(client, app):
         assert college_service.plan()[0]["id"] == outro["id"]
 
 
-def test_prazo_salvo_nas_configuracoes_refaz_o_plano(client, app):
-    client.post("/configuracoes/salvar", data={"college_deadline": add_days(today_iso(), 20)},
-                follow_redirects=True)
+def test_data_da_prova_salva_pela_tela_refaz_o_plano(client, app):
     with app.app_context():
-        assert college_service.deadline() == add_days(today_iso(), 20)
-        assert all(t["planned_date"] <= add_days(today_iso(), 20)
-                   for t in college_service.plan())
+        disciplina = query_one("SELECT id FROM college_subjects"
+                               " WHERE name = 'Qualidade e Testes de Software'")
+    nova = add_days(today_iso(), 15)
+    resposta = client.post(f"/faculdade/disciplinas/{disciplina['id']}/prova",
+                           data={"exam_date": nova}, follow_redirects=True)
+    assert resposta.status_code == 200
+    with app.app_context():
+        temas = [t for t in college_service.plan()
+                 if t["college_subject_id"] == disciplina["id"]]
+        assert temas and all(t["planned_date"] <= nova for t in temas)
+
+
+def test_reiniciar_o_ciclo_pela_tela(client, app):
+    resposta = client.post("/faculdade/ciclo/reiniciar", follow_redirects=True)
+    assert resposta.status_code == 200
+    with app.app_context():
+        assert college_service.progress()["done"] == 0

@@ -54,7 +54,8 @@ def index():
             "SELECT c.*, COALESCE(s.minutes, 0) AS minutes FROM college_subjects c"
             " LEFT JOIN (SELECT college_subject_id, SUM(minutes) AS minutes"
             "            FROM college_sessions GROUP BY college_subject_id) s"
-            " ON s.college_subject_id = c.id WHERE c.active = 1 ORDER BY c.name"),
+            " ON s.college_subject_id = c.id WHERE c.active = 1"
+            " ORDER BY c.exam_date IS NULL, c.exam_date, c.name"),
         tasks=query_all(
             "SELECT t.*, c.name AS subject_name FROM college_tasks t"
             " LEFT JOIN college_subjects c ON c.id = t.college_subject_id"
@@ -93,16 +94,19 @@ def save_subject():
         return redirect(url_for("college.index"))
     professor = as_text(request.form.get("professor"), max_length=80)
     notes = as_text(request.form.get("notes"))
+    exam = as_text(request.form.get("exam_date")) or None
     if subject_id:
         execute(
-            "UPDATE college_subjects SET name = ?, professor = ?, notes = ?, active = ?"
-            " WHERE id = ?",
-            (name, professor, notes, as_bool(request.form.get("active") or "1"), subject_id))
+            "UPDATE college_subjects SET name = ?, professor = ?, notes = ?, active = ?,"
+            " exam_date = ? WHERE id = ?",
+            (name, professor, notes, as_bool(request.form.get("active") or "1"),
+             exam, subject_id))
         flash("Disciplina da faculdade atualizada.", "success")
     else:
-        insert("INSERT INTO college_subjects (name, professor, notes) VALUES (?, ?, ?)",
-               (name, professor, notes))
+        insert("INSERT INTO college_subjects (name, professor, notes, exam_date)"
+               " VALUES (?, ?, ?, ?)", (name, professor, notes, exam))
         flash("Disciplina da faculdade cadastrada.", "success")
+    college_service.plan()      # data de prova nova reescreve o calendario
     return redirect(redirect_target(url_for("college.index")))
 
 
@@ -113,8 +117,27 @@ def delete_subject(subject_id: int):
     return redirect(url_for("college.index"))
 
 
+@bp.route("/disciplinas/<int:subject_id>/prova", methods=["POST"])
+def set_exam_date(subject_id: int):
+    """Data da prova: e ela que define o ritmo desta disciplina."""
+    college_service.set_exam_date(subject_id, as_text(request.form.get("exam_date")) or None)
+    college_service.plan()
+    flash("Data da prova salva - o plano desta disciplina foi refeito.", "success")
+    return redirect(redirect_target(url_for("college.index")))
+
+
+@bp.route("/ciclo/reiniciar", methods=["POST"])
+def restart_cycle():
+    """Zera o ciclo inteiro - virada de semestre ou revisao geral antes da prova."""
+    resultado = college_service.restart_cycle()
+    flash(f"Ciclo reiniciado: {resultado['topics']} tema(s) voltaram a pendente, "
+          f"{resultado['reviews']} revisao(oes) arquivada(s), "
+          f"{resultado['plan']} tema(s) no novo plano.", "success")
+    return redirect(redirect_target(url_for("college.index")))
+
+
 # --------------------------------------------------------------------------
-# Temas: o conteudo que precisa caber ate o prazo
+# Temas: o conteudo que precisa caber ate a prova
 # --------------------------------------------------------------------------
 @bp.route("/temas", methods=["POST"])
 def save_topic():

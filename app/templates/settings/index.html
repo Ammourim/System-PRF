@@ -106,16 +106,16 @@
   <section class="card">
     <div class="card-head"><div class="card-title">Faculdade: prazo e revisao</div></div>
     <div class="form-grid cols-2">
-      <div class="field"><label for="college_deadline">Terminar o conteudo ate</label>
+      <div class="field"><label for="college_deadline">Prazo de reserva (sem data de prova)</label>
         <input type="date" id="college_deadline" name="college_deadline" value="{{ settings.college_deadline }}"></div>
       <div class="field"><label for="college_review_intervals">Intervalos da revisao (dias)</label>
         <input type="text" id="college_review_intervals" name="college_review_intervals" value="{{ settings.college_review_intervals }}"></div>
     </div>
     <div class="tiny dim">
-      O prazo e o unico numero que monta o plano da faculdade: os temas pendentes sao
-      espalhados entre hoje e essa data, alternando as disciplinas. Mudar o prazo refaz o
-      plano inteiro na proxima visita. Os intervalos sao mais curtos que os do PRF de
-      proposito - uma D60 cairia depois da prova.
+Quem monta o plano da faculdade e a <strong>data da prova de cada disciplina</strong>,
+      editada na tela da faculdade. O prazo aqui e so a reserva, usada por disciplina
+      cadastrada sem data de prova. Os intervalos de revisao sao mais curtos que os do PRF
+      de proposito - uma D60 cairia depois da prova.
     </div>
   </section>
 
